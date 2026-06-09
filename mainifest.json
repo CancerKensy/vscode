@@ -1,0 +1,9 @@
+{
+    "name": "Leberschuss",
+    "short_name": "Leberschuss",
+    "start_url": "./index.html",
+    "display": "standalone",
+    "background_color": "#061014",
+    "theme_color": "#061014",
+    "icons": []
+}

@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leberschuss</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#061014">
+</head>
+<body>
+
+<h1>Leberschuss</h1>
+
+<section id="playerSection">
+    <h2>Spieler</h2>
+
+    <input type="text" id="newPlayerName" placeholder="Spielername">
+    <button onclick="addPlayer()">Spieler hinzufügen</button>
+
+    <div id="playerList"></div>
+</section>
+
+<hr>
+
+<section id="setupSection">
+    <h2>Neues Spiel</h2>
+
+    <label for="mode">Spielmodus:</label>
+    <select id="mode" onchange="onModeChange()">
+        <option value="1v1">1v1</option>
+        <option value="2v2">2v2</option>
+    </select>
+
+    <h3>Spieler auswählen</h3>
+    <div id="playerSelection"></div>
+
+    <button onclick="startGame()">Spiel starten</button>
+</section>
+
+<hr>
+
+<section id="currentGameSection">
+    <h2>Aktuelles Spiel</h2>
+    <div id="gameInfo"></div>
+</section>
+
+<script src="app.js"></script>
+
+<script>
+if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("sw.js");
+}
+</script>
+
+</body>
+</html>
