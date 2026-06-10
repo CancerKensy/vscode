@@ -463,7 +463,8 @@ function renderGameInfo() {
                 onpointerdown="startPress(event, 1)"
                 onpointerup="endPress(event, 1)"
                 onpointercancel="cancelPress()"
-                onpointerleave="cancelPress()">
+                onpointerleave="cancelPress()"
+                oncontextmenu="return false">
 
             </button>
         </div>
@@ -473,7 +474,8 @@ function renderGameInfo() {
                 onpointerdown="startPress(event, -1)"
                 onpointerup="endPress(event, -1)"
                 onpointercancel="cancelPress()"
-                onpointerleave="cancelPress()">
+                onpointerleave="cancelPress()"
+                oncontextmenu="return false">
             </button>
         </div>
         <div class="sideTargets rightTargets">
@@ -618,3 +620,25 @@ renderGameInfo();
 document.addEventListener("contextmenu", event => {
     event.preventDefault();
 });
+
+document.addEventListener("selectstart", event => {
+    event.preventDefault();
+});
+
+document.addEventListener("dragstart", event => {
+    event.preventDefault();
+});
+window.addEventListener("contextmenu", function (event) {
+    event.preventDefault();
+    return false;
+}, { capture: true });
+
+window.addEventListener("selectstart", function (event) {
+    event.preventDefault();
+    return false;
+}, { capture: true });
+
+window.addEventListener("dragstart", function (event) {
+    event.preventDefault();
+    return false;
+}, { capture: true });
