@@ -58,6 +58,10 @@ button {
     border: 3px solid #222;
     border-radius: 8px;
     background: #fafafa;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    touch-action: manipulation;
 }
 
 .fieldPlayer {
@@ -203,5 +207,5 @@ button {
     filter: brightness(1.15);
 }
 .redButton:hover {
-    filter: brightness(1.15);
+    filter: brightness(1.55);
 }
