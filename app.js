@@ -21,7 +21,35 @@ const horizontalMap = {
     bottomLeft: "bottomRight",
     bottomRight: "bottomLeft"
 };
+function debugLog(...args) {
 
+    const text = args
+        .map(x =>
+            typeof x === "object"
+                ? JSON.stringify(x)
+                : String(x)
+        )
+        .join(" ");
+
+    console.log(text);
+
+    const div =
+        document.getElementById("debugConsole");
+
+    if (!div)
+        return;
+
+    const line =
+        document.createElement("div");
+
+    line.textContent =
+        `[${new Date().toLocaleTimeString()}] ${text}`;
+
+    div.appendChild(line);
+
+    div.scrollTop =
+        div.scrollHeight;
+}
 function savePlayers() {
     localStorage.setItem("players", JSON.stringify(players));
 }
@@ -505,8 +533,7 @@ function renderGameInfo() {
 <button onclick="redoGameAction()" ${redoStack.length === 0 ? "disabled" : ""}>
     Redo
 </button>
-
-<button onclick="nextTurn()">Weiter</button>
+<div id="debugConsole"></div>
 
 
         ${roundInfo}
@@ -559,7 +586,7 @@ function getElapsedTime() {
     return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 function targetClicked(value) {
-    console.log("Target:", value);
+    debugLog("Target:", value);
 }
 
 
@@ -594,9 +621,9 @@ function doubleClick(side) {
 }
 function redClicked(side, isLongPress) {
     if (isLongPress) {
-        console.log("LANGDRUCK", side);
+        debugLog("LANGDRUCK", side);
     } else {
-        console.log("KURZDRUCK", side);
+        debugLog("KURZDRUCK", side);
     }
 }
 const last = getLastSelection();
