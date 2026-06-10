@@ -460,6 +460,7 @@ function renderGameInfo() {
         <div class="redTargets leftredTargets">
             <button
                 class="redButton"
+                ondblclick="doubleClick(1)"
                 onpointerdown="startPress(event, 1)"
                 onpointerup="endPress(event, 1)"
                 onpointercancel="cancelPress()"
@@ -471,6 +472,7 @@ function renderGameInfo() {
         <div class="redTargets rightredTargets">
             <button
                 class="redButton"
+                ondblclick="doubleClick(-1)"
                 onpointerdown="startPress(event, -1)"
                 onpointerup="endPress(event, -1)"
                 onpointercancel="cancelPress()"
@@ -587,7 +589,9 @@ function endPress(event, side) {
 function cancelPress() {
     clearTimeout(pressTimer);
 }
-
+function doubleClick(side) {
+    redClicked(side, true);
+}
 function redClicked(side, isLongPress) {
     if (isLongPress) {
         console.log("LANGDRUCK", side);
