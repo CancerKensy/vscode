@@ -4,8 +4,9 @@ let gameTimer = null;
 let roundTransition = false;
 let undoStack = JSON.parse(localStorage.getItem("undoStack")) || [];
 let redoStack = JSON.parse(localStorage.getItem("redoStack")) || [];
-let pressTimer = null;
-let longPressTriggered = false;
+const pressState = {};
+const doubleClickDelay = 350;
+const longPressDelay = 500;
 const startPattern = ["topLeft", "bottomRight", "bottomLeft", "topRight"];
 
 const diagonalMap = {
@@ -426,6 +427,7 @@ function endGame() {
 }
 
 function renderGameInfo() {
+    const gameInfo = document.getElementById("gameInfo");
     if (!currentGame) {
         gameInfo.innerHTML = "";
         return;
@@ -437,7 +439,7 @@ function renderGameInfo() {
             Runde ${currentGame.round}
         </h2>`;
     }
-    const gameInfo = document.getElementById("gameInfo");
+    
 
 
 
@@ -478,40 +480,33 @@ function renderGameInfo() {
             ${t2Right}
         </div>
         <div class="sideTargets leftTargets">
-            <button class="targetButton" onclick="targetClicked(1)">1</button>
-            <button class="targetButton" onclick="targetClicked(2)">2</button>
-            <button class="targetButton" onclick="targetClicked(3)">3</button>
+            <button class="targetButton" onpointerdown="targetPointerDown(event, 1)" onpointerup="targetPointerUp(event, 1)" onpointercancel="targetPointerCancel(1)" onpointerleave="targetPointerCancel(1)">1</button>
+            <button class="targetButton" onpointerdown="targetPointerDown(event, 2)" onpointerup="targetPointerUp(event, 2)" onpointercancel="targetPointerCancel(2)" onpointerleave="targetPointerCancel(2)">2</button>
+            <button class="targetButton" onpointerdown="targetPointerDown(event, 3)" onpointerup="targetPointerUp(event, 3)" onpointercancel="targetPointerCancel(3)" onpointerleave="targetPointerCancel(3)">3</button>
         </div>
         <div class="sideTargets middleTargets">
-            <button class="targetButton" onclick="targetClicked(0)" >0</button>
+            <button class="targetButton" onpointerdown="targetPointerDown(event, 0)" onpointerup="targetPointerUp(event, 0)" onpointercancel="targetPointerCancel(0)" onpointerleave="targetPointerCancel(0)">0</button>
         </div>
         <div class="redTargets leftredTargets">
-            <button
-                class="redButton"
-                ondblclick="doubleClick(1)"
-                onpointerdown="startPress(event, 1)"
-                onpointerup="endPress(event, 1)"
-                onpointercancel="cancelPress()"
-                onpointerleave="cancelPress()"
-                oncontextmenu="return false">
-
+            <button class="redButton"
+                onpointerdown="targetPointerDown(event, 'red1')"
+                onpointerup="targetPointerUp(event, 'red1')"
+                onpointercancel="targetPointerCancel('red1')"
+                onpointerleave="targetPointerCancel('red1')">
             </button>
         </div>
         <div class="redTargets rightredTargets">
-            <button
-                class="redButton"
-                ondblclick="doubleClick(-1)"
-                onpointerdown="startPress(event, -1)"
-                onpointerup="endPress(event, -1)"
-                onpointercancel="cancelPress()"
-                onpointerleave="cancelPress()"
-                oncontextmenu="return false">
+            <button class="redButton"
+                onpointerdown="targetPointerDown(event, 'red-1')"
+                onpointerup="targetPointerUp(event, 'red-1')"
+                onpointercancel="targetPointerCancel('red-1')"
+                onpointerleave="targetPointerCancel('red-1')">
             </button>
         </div>
         <div class="sideTargets rightTargets">
-            <button class="targetButton" onclick="targetClicked(-1)">1</button>
-            <button class="targetButton" onclick="targetClicked(-2)">2</button>
-            <button class="targetButton" onclick="targetClicked(-3)">3</button>
+            <button class="targetButton" onpointerdown="targetPointerDown(event, -1)" onpointerup="targetPointerUp(event, -1)" onpointercancel="targetPointerCancel(-1)" onpointerleave="targetPointerCancel(-1)">1</button>
+            <button class="targetButton" onpointerdown="targetPointerDown(event, -2)" onpointerup="targetPointerUp(event, -2)" onpointercancel="targetPointerCancel(-2)" onpointerleave="targetPointerCancel(-2)">2</button>
+            <button class="targetButton" onpointerdown="targetPointerDown(event, -3)" onpointerup="targetPointerUp(event, -3)" onpointercancel="targetPointerCancel(-3)" onpointerleave="targetPointerCancel(-3)">3</button>
         </div>
     </div>
 `;
@@ -585,46 +580,97 @@ function getElapsedTime() {
 
     return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
-function targetClicked(value) {
-    debugLog("Target:", value);
+
+
+function getPressKey(value) {
+    return String(value);
 }
 
-
-function startPress(event, side) {
+function targetPointerDown(event, value) {
     event.preventDefault();
 
-    longPressTriggered = false;
+    const key = getPressKey(value);
 
-    clearTimeout(pressTimer);
+    if (!pressState[key]) {
+        pressState[key] = {
+            longTimer: null,
+            clickTimer: null,
+            longTriggered: false
+        };
+    }
 
-    pressTimer = setTimeout(() => {
-        longPressTriggered = true;
-        redClicked(side, true);
-    }, 500);
+    const state = pressState[key];
+
+    state.longTriggered = false;
+    clearTimeout(state.longTimer);
+
+    state.longTimer = setTimeout(() => {
+        state.longTriggered = true;
+
+        if (state.clickTimer) {
+            clearTimeout(state.clickTimer);
+            state.clickTimer = null;
+        }
+
+        handleTargetInput(value, true);
+    }, longPressDelay);
 }
 
-function endPress(event, side) {
+function targetPointerUp(event, value) {
     event.preventDefault();
 
-    clearTimeout(pressTimer);
+    const key = getPressKey(value);
+    const state = pressState[key];
 
-    if (!longPressTriggered) {
-        redClicked(side, false);
+    if (!state) return;
+
+    clearTimeout(state.longTimer);
+
+    if (state.longTriggered) {
+        state.longTriggered = false;
+        return;
     }
+
+    if (state.clickTimer) {
+        clearTimeout(state.clickTimer);
+        state.clickTimer = null;
+
+        handleTargetInput(value, true);
+        return;
+    }
+
+    state.clickTimer = setTimeout(() => {
+        state.clickTimer = null;
+        handleTargetInput(value, false);
+    }, doubleClickDelay);
 }
 
-function cancelPress() {
-    clearTimeout(pressTimer);
+function targetPointerCancel(value) {
+    const key = getPressKey(value);
+    const state = pressState[key];
+
+    if (!state) return;
+
+    clearTimeout(state.longTimer);
+    state.longTriggered = false;
 }
-function doubleClick(side) {
-    redClicked(side, true);
-}
-function redClicked(side, isLongPress) {
-    if (isLongPress) {
-        debugLog("LANGDRUCK", side);
-    } else {
-        debugLog("KURZDRUCK", side);
+
+function handleTargetInput(value, isLongPress) {
+    if (String(value).startsWith("red")) {
+        const side = Number(String(value).replace("red", ""));
+
+        debugLog(
+            isLongPress ? "ROT LANG" : "ROT KURZ",
+            side
+        );
+
+        return;
     }
+
+    debugLog(
+        isLongPress ? "TARGET LANG" : "TARGET KURZ",
+        value
+    );
 }
 const last = getLastSelection();
 
