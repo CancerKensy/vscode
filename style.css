@@ -227,13 +227,23 @@ button,
     width: 40px;
     height: 60px;
     background: #f52500;
-    border: 2px solid #222;
-    border-radius: 8px;
+    border: 0px solid #222;
+    border-radius: 0px;
     font-size: 16px;
     font-weight: bold;
     cursor: pointer;
+    clip-path: polygon(
+        0% 0%,
+        50% 0%,
+        100% 40%,
+        100% 60%,
+        50% 100%,
+        0% 100%
+    );
 }
-
+.rightredTargets .redButton {
+    transform: scaleX(-1);
+}
 .targetButton:hover {
     filter: brightness(1.15);
 }

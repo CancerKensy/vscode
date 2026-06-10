@@ -487,12 +487,13 @@ function renderGameInfo() {
         <div class="sideTargets middleTargets">
             <button class="targetButton" onpointerdown="targetPointerDown(event, 0)" onpointerup="targetPointerUp(event, 0)" onpointercancel="targetPointerCancel(0)" onpointerleave="targetPointerCancel(0)">0</button>
         </div>
+        
         <div class="redTargets leftredTargets">
             <button class="redButton"
                 onpointerdown="targetPointerDown(event, 'red1')"
                 onpointerup="targetPointerUp(event, 'red1')"
                 onpointercancel="targetPointerCancel('red1')"
-                onpointerleave="targetPointerCancel('red1')">
+                onpointerleave="targetPointerCancel('red1')">1
             </button>
         </div>
         <div class="redTargets rightredTargets">
@@ -500,7 +501,7 @@ function renderGameInfo() {
                 onpointerdown="targetPointerDown(event, 'red-1')"
                 onpointerup="targetPointerUp(event, 'red-1')"
                 onpointercancel="targetPointerCancel('red-1')"
-                onpointerleave="targetPointerCancel('red-1')">
+                onpointerleave="targetPointerCancel('red-1')">1
             </button>
         </div>
         <div class="sideTargets rightTargets">
