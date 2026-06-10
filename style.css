@@ -141,11 +141,33 @@ button {
 
     z-index: 4;
 }
+.redTargets {
+    position: absolute;
+    top: 50%;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 
+    z-index: 4;
+}
+.leftredTargets {
+    left: 10px;
+    transform: translateY(-50%);
+    flex-direction: row;
+}
+.rightredTargets {
+    right: 10px;
+    transform: translateY(-50%);
+    flex-direction: row;
+}
 .leftTargets {
     left: 120px;
 }
-
+.middleTargets {
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+}
 .rightTargets {
     right: 120px;
 }
@@ -163,7 +185,23 @@ button {
 
     cursor: pointer;
 }
+.redButton {
+    width: 40px;
+    height: 60px;
+
+    background: #f52500;
+    border: 2px solid #222;
+    border-radius: 8px;
+
+    font-size: 24px;
+    font-weight: bold;
+
+    cursor: pointer;
+}
 
 .targetButton:hover {
+    filter: brightness(1.15);
+}
+.redButton:hover {
     filter: brightness(1.15);
 }

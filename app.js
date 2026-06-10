@@ -4,6 +4,8 @@ let gameTimer = null;
 let roundTransition = false;
 let undoStack = JSON.parse(localStorage.getItem("undoStack")) || [];
 let redoStack = JSON.parse(localStorage.getItem("redoStack")) || [];
+let pressTimer = null;
+let longPressTriggered = false;
 const startPattern = ["topLeft", "bottomRight", "bottomLeft", "topRight"];
 
 const diagonalMap = {
@@ -448,18 +450,37 @@ function renderGameInfo() {
             ${t2Right}
         </div>
         <div class="sideTargets leftTargets">
-    <button class="targetButton" onclick="targetClicked(3)">3</button>
-    <button class="targetButton" onclick="targetClicked(2)">2</button>
-    <button class="targetButton" onclick="targetClicked(1)">1</button>
-    <button class="targetButton" onclick="targetClicked(0)">TOT</button>
-</div>
+            <button class="targetButton" onclick="targetClicked(1)">1</button>
+            <button class="targetButton" onclick="targetClicked(2)">2</button>
+            <button class="targetButton" onclick="targetClicked(3)">3</button>
+        </div>
+        <div class="sideTargets middleTargets">
+            <button class="targetButton" onclick="targetClicked(0)" >0</button>
+        </div>
+        <div class="redTargets leftredTargets">
+            <button
+                class="redButton"
+                onpointerdown="startPress(event, 1)"
+                onpointerup="endPress(event, 1)"
+                onpointercancel="cancelPress()"
+                onpointerleave="cancelPress()">
 
-<div class="sideTargets rightTargets">
-    <button class="targetButton" onclick="targetClicked(0)">TOT</button>
-    <button class="targetButton" onclick="targetClicked(1)">1</button>
-    <button class="targetButton" onclick="targetClicked(2)">2</button>
-    <button class="targetButton" onclick="targetClicked(3)">3</button>
-</div>
+            </button>
+        </div>
+        <div class="redTargets rightredTargets">
+            <button
+                class="redButton"
+                onpointerdown="startPress(event, -1)"
+                onpointerup="endPress(event, -1)"
+                onpointercancel="cancelPress()"
+                onpointerleave="cancelPress()">
+            </button>
+        </div>
+        <div class="sideTargets rightTargets">
+            <button class="targetButton" onclick="targetClicked(-1)">1</button>
+            <button class="targetButton" onclick="targetClicked(-2)">2</button>
+            <button class="targetButton" onclick="targetClicked(-3)">3</button>
+        </div>
     </div>
 `;
 
@@ -535,6 +556,42 @@ function getElapsedTime() {
 }
 function targetClicked(value) {
     console.log("Target:", value);
+}
+
+
+function startPress(event, side) {
+    event.preventDefault();
+
+    longPressTriggered = false;
+
+    clearTimeout(pressTimer);
+
+    pressTimer = setTimeout(() => {
+        longPressTriggered = true;
+        redClicked(side, true);
+    }, 500);
+}
+
+function endPress(event, side) {
+    event.preventDefault();
+
+    clearTimeout(pressTimer);
+
+    if (!longPressTriggered) {
+        redClicked(side, false);
+    }
+}
+
+function cancelPress() {
+    clearTimeout(pressTimer);
+}
+
+function redClicked(side, isLongPress) {
+    if (isLongPress) {
+        console.log("LANGDRUCK", side);
+    } else {
+        console.log("KURZDRUCK", side);
+    }
 }
 const last = getLastSelection();
 
