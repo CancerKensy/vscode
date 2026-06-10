@@ -615,3 +615,6 @@ if (currentGame) {
 }
 
 renderGameInfo();
+document.addEventListener("contextmenu", event => {
+    event.preventDefault();
+});
