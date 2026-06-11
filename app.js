@@ -480,9 +480,9 @@ function renderGameInfo() {
             ${t2Right}
         </div>
         <div class="sideTargets leftTargets">
-            <button class="targetButton" onpointerdown="targetPointerDown(event, 1)" onpointerup="targetPointerUp(event, 1)" onpointercancel="targetPointerCancel(1)" onpointerleave="targetPointerCancel(1)">1</button>
-            <button class="targetButton" onpointerdown="targetPointerDown(event, 2)" onpointerup="targetPointerUp(event, 2)" onpointercancel="targetPointerCancel(2)" onpointerleave="targetPointerCancel(2)">2</button>
-            <button class="targetButton" onpointerdown="targetPointerDown(event, 3)" onpointerup="targetPointerUp(event, 3)" onpointercancel="targetPointerCancel(3)" onpointerleave="targetPointerCancel(3)">3</button>
+            <button class="targetButton target3" onpointerdown="targetPointerDown(event, 3)" onpointerup="targetPointerUp(event, 3)" onpointercancel="targetPointerCancel(3)" onpointerleave="targetPointerCancel(3)">3</button>
+            <button class="targetButton target2" onpointerdown="targetPointerDown(event, 2)" onpointerup="targetPointerUp(event, 2)" onpointercancel="targetPointerCancel(2)" onpointerleave="targetPointerCancel(2)">2</button>
+            <button class="targetButton target1" onpointerdown="targetPointerDown(event, 1)" onpointerup="targetPointerUp(event, 1)" onpointercancel="targetPointerCancel(1)" onpointerleave="targetPointerCancel(1)">1</button>
         </div>
         <div class="sideTargets middleTargets">
             <button class="targetButton" onpointerdown="targetPointerDown(event, 0)" onpointerup="targetPointerUp(event, 0)" onpointercancel="targetPointerCancel(0)" onpointerleave="targetPointerCancel(0)">0</button>
@@ -505,9 +505,9 @@ function renderGameInfo() {
             </button>
         </div>
         <div class="sideTargets rightTargets">
-            <button class="targetButton" onpointerdown="targetPointerDown(event, -1)" onpointerup="targetPointerUp(event, -1)" onpointercancel="targetPointerCancel(-1)" onpointerleave="targetPointerCancel(-1)">1</button>
-            <button class="targetButton" onpointerdown="targetPointerDown(event, -2)" onpointerup="targetPointerUp(event, -2)" onpointercancel="targetPointerCancel(-2)" onpointerleave="targetPointerCancel(-2)">2</button>
-            <button class="targetButton" onpointerdown="targetPointerDown(event, -3)" onpointerup="targetPointerUp(event, -3)" onpointercancel="targetPointerCancel(-3)" onpointerleave="targetPointerCancel(-3)">3</button>
+            <button class="targetButton target3" onpointerdown="targetPointerDown(event, -3)" onpointerup="targetPointerUp(event, -3)" onpointercancel="targetPointerCancel(-3)" onpointerleave="targetPointerCancel(-3)">3</button>
+            <button class="targetButton target2" onpointerdown="targetPointerDown(event, -2)" onpointerup="targetPointerUp(event, -2)" onpointercancel="targetPointerCancel(-2)" onpointerleave="targetPointerCancel(-2)">2</button>
+            <button class="targetButton target1" onpointerdown="targetPointerDown(event, -1)" onpointerup="targetPointerUp(event, -1)" onpointercancel="targetPointerCancel(-1)" onpointerleave="targetPointerCancel(-1)">1</button>
         </div>
     </div>
 `;

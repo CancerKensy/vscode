@@ -172,15 +172,15 @@ button,
 .sideTargets {
     position: absolute;
     top: 50%;
-    transform: translateY(-50%);
+    
     display: flex;
-    flex-direction: column;
-    gap: 8px;
+    flex-direction: row;
+    gap: 0;
     z-index: 4;
 }
 
 .leftTargets {
-    left: 120px;
+    left: 60px;
 }
 
 .middleTargets {
@@ -190,7 +190,7 @@ button,
 }
 
 .rightTargets {
-    right: 120px;
+    right: 40px;
 }
 
 .redTargets {
@@ -213,16 +213,53 @@ button,
 }
 
 .targetButton {
-    width: 90px;
-    height: 60px;
     background: #f5aa00;
-    border: 2px solid #222;
-    border-radius: 8px;
+    border: 0px solid #222;
+    border-radius: 0;
     font-size: 24px;
     font-weight: bold;
     cursor: pointer;
 }
+.target1 {
+    width: 90px;
+    height: 320px;
+    transform: translateY(-50%);
+    clip-path: polygon(
+        0% 25%,
+        67% 12.5%,
+        100% 50%,
+        67% 87.5%,
+        0% 75%
+    );
+}
 
+.target2 {
+    width: 60px;
+    height: 160px;
+    transform: translateY(-50%);
+    clip-path: polygon(
+        0% 25%,
+        100% 0%,
+        100% 100%,
+        0% 75%
+    );
+}
+
+.target3 {
+    width: 60px;
+    height: 80px;
+    transform: translateY(-50%);
+    clip-path: polygon(
+        0% 50%,
+        100% 0%,
+        100% 100%,
+        0% 50%
+    );
+}
+.rightTargets {
+    right: 120px;
+    transform: scaleX(-1);
+}
 .redButton {
     width: 40px;
     height: 60px;
@@ -252,7 +289,9 @@ button,
     filter: brightness(1.55);
 }
 
-.targetButton:active,
+.targetButton:active{
+    transform: translateY(-50%) scale(0.96);
+}
 .redButton:active {
     transform: scale(0.96);
 }
