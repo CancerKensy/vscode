@@ -270,7 +270,7 @@ button,
     background: #f52500;
     border: 0px solid #222;
     border-radius: 0px;
-    font-size: 1.6cqw;
+    font-size: 3cqw;
     font-weight: bold;
     cursor: pointer;
     transform: translateY(-50%);
@@ -329,9 +329,20 @@ button,
     text-decoration: line-through;
     opacity: 0.5;
 }
+
+.debugMerged {
+    text-decoration: line-through;
+    opacity: 0.5;
+    color: #66aaff;
+}
 .gameField:hover:not(:has(.targetButton:hover)):not(:has(.redButton:hover)) {
     background: #032644;
 }
 .gameField:active:not(:has(.targetButton:active)):not(:has(.redButton:active)) {
     background: #032039; 
+}
+.debugMerged {
+    text-decoration: line-through;
+    opacity: 0.45;
+    color: #66aaff;
 }

@@ -151,6 +151,9 @@ function restoreDebugLog() {
             line.classList.add("debugUndone");
         }
 
+        if (log.merged && !log.undone) {
+            line.classList.add("debugMerged");
+        }
         div.appendChild(line);
     });
 
@@ -203,44 +206,139 @@ function commitGameAction(actionFunction) {
 function undoGameAction() {
     if (!currentGame || undoStack.length === 0) return;
 
-    const previousGame = undoStack[undoStack.length - 1];
+    const currentBeforeUndo = cloneGame(currentGame);
+    const previousGame = undoStack.pop();
 
-    const removedEvents =
-        currentGame.events.slice(previousGame.events.length);
+    const previousLogIds = new Set(
+        previousGame.events
+            .filter(e => e.logId)
+            .map(e => e.logId)
+    );
 
-    removedEvents.forEach(event => {
-        if (event?.logId) {
-            markLogUndone(event.logId);
+    currentBeforeUndo.events.forEach(e => {
+
+        if (!e.logId) return;
+
+        if (!previousLogIds.has(e.logId)) {
+
+            if (e.type === "field_merge") {
+                deleteLog(e.logId);
+            } else {
+                markLogUndone(e.logId);
+            }
         }
     });
 
-    redoStack.push(cloneGame(currentGame));
-    currentGame = undoStack.pop();
+    previousGame.events.forEach(e => {
+
+        if (!e.logId) return;
+
+        markLogRedone(e.logId);
+
+        if (e.merged) {
+            markLogMerged(e.logId);
+        } else {
+            unmarkLogMerged(e.logId);
+        }
+    });
+
+    const removedEvents =
+        currentBeforeUndo.events.filter(
+            e => !previousGame.events.includes(e)
+        );
+
+    removedEvents.forEach(e => {
+
+        if (
+            e.type === "field_add" ||
+            e.type === "field_remove"
+        ) {
+
+            const matchingEvent =
+                previousGame.events.find(x =>
+                    x.logId === e.logId
+                );
+
+            if (matchingEvent) {
+                unmarkLogMerged(e.logId);
+                markLogRedone(e.logId);
+            }
+        }
+    });
+
+    redoStack.push(currentBeforeUndo);
+    limitHistoryStack(redoStack);
+
+    currentGame = previousGame;
 
     saveCurrentGame();
     saveHistory();
 
     renderGameInfo();
-    restoreDebugLog();
-}
 
+    requestAnimationFrame(() => {
+        updateAllFieldCountDisplays();
+        restoreDebugLog();
+    });
+}
+function limitHistoryStack(stack) {
+    while (stack.length > maxHistoryEntries) {
+        stack.shift();
+    }
+}
+function deleteLog(logId) {
+
+    let logs =
+        JSON.parse(localStorage.getItem("debugLog"))
+        || [];
+
+    logs =
+        logs.filter(x => x.id !== logId);
+
+    localStorage.setItem(
+        "debugLog",
+        JSON.stringify(logs)
+    );
+
+    const el =
+        document.getElementById(logId);
+
+    if (el) {
+        el.remove();
+    }
+}
 function redoGameAction() {
     if (!currentGame || redoStack.length === 0) return;
 
-    undoStack.push(cloneGame(currentGame));
-    while (undoStack.length > maxHistoryEntries) {
-        undoStack.shift();
-    }
+    const currentBeforeRedo = cloneGame(currentGame);
     const redoneGame = redoStack.pop();
 
-    const addedEvents =
-        redoneGame.events.slice(currentGame.events.length);
+    const currentLogIds = new Set(
+        currentGame.events
+            .filter(e => e.logId)
+            .map(e => e.logId)
+    );
 
-    addedEvents.forEach(event => {
-        if (event?.logId) {
-            markLogRedone(event.logId);
+    redoneGame.events.forEach(e => {
+        if (!e.logId) return;
+
+        if (!currentLogIds.has(e.logId)) {
+            if (e.type === "field_merge") {
+                restoreDeletedLog(e.logId, e.logText);
+            }
+
+            markLogRedone(e.logId);
+        }
+
+        if (e.merged) {
+            markLogMerged(e.logId);
+        } else {
+            unmarkLogMerged(e.logId);
         }
     });
+
+    undoStack.push(currentBeforeRedo);
+    limitHistoryStack(undoStack);
 
     currentGame = redoneGame;
 
@@ -248,7 +346,11 @@ function redoGameAction() {
     saveHistory();
 
     renderGameInfo();
-    restoreDebugLog();
+
+    requestAnimationFrame(() => {
+        updateAllFieldCountDisplays();
+        restoreDebugLog();
+    });
 }
 function addPlayer() {
     const input = document.getElementById("newPlayerName");
@@ -342,7 +444,29 @@ function renderPlayerSelection() {
 
     document.getElementById("playerSelection").innerHTML = html;
 }
+function getLogTextById(logId) {
+    const logs = JSON.parse(localStorage.getItem("debugLog")) || [];
+    const entry = logs.find(x => x.id === logId);
+    return entry ? entry.text : "";
+}
 
+function restoreDeletedLog(logId, text) {
+    if (!text) return;
+
+    let logs =
+        JSON.parse(localStorage.getItem("debugLog")) || [];
+
+    if (!logs.some(x => x.id === logId)) {
+        logs.push({
+            id: logId,
+            text: text,
+            undone: false,
+            merged: false
+        });
+    }
+
+    localStorage.setItem("debugLog", JSON.stringify(logs));
+}
 function playerSelectHtml(id) {
     const last = getLastSelection();
 
@@ -900,7 +1024,7 @@ function handleTargetInput(value, isLongPress) {
     if (!isLongPress) {
         commitGameAction(() => {
             currentGame.fieldCounts[key]++;
-            updateFieldCountDisplay(value);
+            
             const scoreText = isOwn
                 ? `-${fieldValue}`
                 : `+${fieldValue}`;
@@ -943,8 +1067,11 @@ function handleTargetInput(value, isLongPress) {
                 playerId: player.playerId,
                 teamIndex: player.teamIndex,
                 timestamp: Date.now(),
-                logId: logId
+                logId: logId,
+                turnKey: getTurnKey(),
+                merged: false
             });
+            checkTurnMergeRule();
         });
 
         return;
@@ -959,7 +1086,7 @@ function handleTargetInput(value, isLongPress) {
 
     commitGameAction(() => {
         currentGame.fieldCounts[key]--;
-        updateFieldCountDisplay(value);
+        
         const scoreText = isOwn
             ? `+${fieldValue}`
             : `-${fieldValue}`;
@@ -1002,8 +1129,11 @@ function handleTargetInput(value, isLongPress) {
             playerId: player.playerId,
             teamIndex: player.teamIndex,
             timestamp: Date.now(),
-            logId: logId
+            logId: logId,
+            turnKey: getTurnKey(),
+            merged: false
         });
+        checkTurnMergeRule();
     });
 }
 const last = getLastSelection();
@@ -1150,6 +1280,7 @@ function markLogUndone(logId) {
 
     if (el) {
         el.classList.add("debugUndone");
+        el.classList.remove("debugMerged");
     }
 }
 function markLogRedone(logId) {
@@ -1286,6 +1417,167 @@ function updateFieldCountDisplay(value) {
 
 function updateAllFieldCountDisplays() {
     [3, 2, 1, 0, -1, -2, -3, "red1", "red-1"].forEach(updateFieldCountDisplay);
+}
+function getTurnKey() {
+    if (!currentGame) return "";
+
+    return `${currentGame.round}_${currentGame.turnInRound}`;
+}
+function checkTurnMergeRule() {
+    if (!currentGame) return;
+
+    const player = getCurrentPlayerInfo();
+    const turnKey = getTurnKey();
+
+    const turnEvents = currentGame.events.filter(e =>
+        !e.merged &&
+        e.turnKey === turnKey &&
+        e.playerId === player.playerId &&
+        e.teamIndex === player.teamIndex &&
+        (e.type === "field_add" || e.type === "field_remove") &&
+        e.fieldValue > 0 &&
+        e.value !== "red1" &&
+        e.value !== "red-1"
+    );
+
+    for (const addEvent of turnEvents.filter(e => e.type === "field_add")) {
+        for (const removeEvent of turnEvents.filter(e => e.type === "field_remove")) {
+
+            if (addEvent.isOwn !== removeEvent.isOwn) {
+                continue;
+            }
+
+            addEvent.merged = true;
+            removeEvent.merged = true;
+
+            markLogMerged(addEvent.logId);
+            markLogMerged(removeEvent.logId);
+
+            const addValue = addEvent.fieldValue;
+            const removeValue = removeEvent.fieldValue;
+
+            let resultText;
+            let scoreDelta;
+
+            if (addEvent.isOwn) {
+
+                scoreDelta = removeValue - addValue;
+
+                if (scoreDelta > 0) {
+                    resultText =
+                        `Wertung: ${scoreDelta}er Löscher (+${scoreDelta})`;
+                } else if (scoreDelta < 0) {
+                    resultText =
+                        `Wertung: ${scoreDelta}er Treffer (${scoreDelta})`;
+                } else {
+                    resultText =
+                        "Wertung: Neutral (0)";
+                }
+
+            } else {
+
+                scoreDelta = addValue - removeValue;
+
+                if (scoreDelta > 0) {
+                    resultText =
+                        `Wertung: ${scoreDelta}er Treffer (+${scoreDelta})`;
+                } else if (scoreDelta < 0) {
+                    resultText =
+                        `Wertung: ${scoreDelta}er Treffer (${scoreDelta})`;
+                } else {
+                    resultText =
+                        "Wertung: Neutral (0)";
+                }
+            }
+
+            const actionVerb =
+                addEvent.isOwn
+                    ? "löscht"
+                    : "kickt";
+
+            const sign =
+                addEvent.isOwn
+                    ? "-"
+                    : "+";
+
+            const actionText =
+                `${player.playerName} aus ${player.teamName} ` +
+                `${actionVerb} ${removeValue} & trifft ${sign}${addValue}`;
+
+            const message =
+                `${actionText}, ${resultText}`;
+
+            const logId = debugLog(message);
+
+            currentGame.events.push({
+                type: "field_merge",
+                isOwn: addEvent.isOwn,
+                addValue: addValue,
+                removeValue: removeValue,
+                scoreDelta: scoreDelta,
+                playerId: player.playerId,
+                teamIndex: player.teamIndex,
+                timestamp: Date.now(),
+                logId: logId,
+                logText: message,
+                turnKey: turnKey,
+                merged: false
+            });
+
+            saveCurrentGame();
+            restoreDebugLog();
+
+            return;
+        }
+    }
+}
+function markLogMerged(logId) {
+    let logs =
+        JSON.parse(localStorage.getItem("debugLog"))
+        || [];
+
+    const entry =
+        logs.find(x => x.id === logId);
+
+    if (entry) {
+        entry.merged = true;
+    }
+
+    localStorage.setItem(
+        "debugLog",
+        JSON.stringify(logs)
+    );
+
+    const el =
+        document.getElementById(logId);
+
+    if (el) {
+        el.classList.add("debugMerged");
+    }
+}
+function unmarkLogMerged(logId) {
+    let logs =
+        JSON.parse(localStorage.getItem("debugLog"))
+        || [];
+
+    const entry =
+        logs.find(x => x.id === logId);
+
+    if (entry) {
+        entry.merged = false;
+    }
+
+    localStorage.setItem(
+        "debugLog",
+        JSON.stringify(logs)
+    );
+
+    const el =
+        document.getElementById(logId);
+
+    if (el) {
+        el.classList.remove("debugMerged");
+    }
 }
 renderPlayerList();
 renderPlayerSelection();
