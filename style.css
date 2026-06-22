@@ -333,5 +333,5 @@ button,
     background: #032644;
 }
 .gameField:active:not(:has(.targetButton:active)):not(:has(.redButton:active)) {
-    background: #032039;
+    background: #032039; 
 }
