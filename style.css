@@ -82,48 +82,33 @@ button,
 .gameField {
     position: relative;
     width: 100%;
-    height: 300px;
+    aspect-ratio: 3 / 1;
+    height: auto;
     margin-top: 20px;
-    border: 3px solid #222;
-    border-radius: 8px;
+    border: 0.4cqw solid #222;
+    border-radius: 1cqw;
     background: #fafafa;
+    overflow: hidden;
+    container-type: size;
 }
 
 .fieldPlayer {
     position: absolute;
-    font-weight: bold;
-    background: white;
-    border: 1px solid #999;
-    padding: 6px 10px;
-    border-radius: 5px;
-    z-index: 5;    
-    touch-action: manipulation;
+    font-size: 2cqw;
+    padding: 0.8cqw 1.2cqw;
+    border: 0.15cqw solid #999;
+    border-radius: 0.8cqw;
 }
 
-.topLeft {
-    top: 10px;
-    left: 10px;
-}
-
-.bottomLeft {
-    bottom: 10px;
-    left: 10px;
-}
-
-.bottomRight {
-    bottom: 10px;
-    right: 10px;
-}
-
-.topRight {
-    top: 10px;
-    right: 10px;
-}
+.topLeft { top: 3cqh; left: 2cqw; }
+.bottomLeft { bottom: 3cqh; left: 2cqw; }
+.bottomRight { bottom: 3cqh; right: 2cqw; }
+.topRight { top: 3cqh; right: 2cqw; }
 
 .activePlayer {
-    border: 3px solid #33ff00;
-    box-shadow: 0 0 15px #33ff00;
-    font-size: 20px;
+    border: 0.45cqw solid #33ff00;
+    box-shadow: 0 0 2cqw #33ff00;
+    font-size: 2.4cqw;
     font-weight: bold;
     color: #1f7709;
 }
@@ -174,18 +159,12 @@ button,
     z-index: 4;
 }
 
-.leftTargets {
-    left: 60px;
-}
-
+.leftTargets { left: 8cqw; }
+.rightTargets { right: 8cqw; }
 .middleTargets {
-    left: 50%;
-    top: 50%;
-    transform: translateY(-50%);
-}
-
-.rightTargets {
-    right: 40px;
+    left: 50cqw;
+    top: 50cqh;
+    transform: translate(-50%, -50%);
 }
 
 .redTargets {
@@ -193,34 +172,33 @@ button,
     top: 50%;
     display: flex;
     flex-direction: row;
-    gap: 8px;
     z-index: 4;
 }
 
 .leftredTargets {
-    left: 10px;
-    transform: translateY(-50%);
+    left: 2cqw;
 }
 
 .rightredTargets {
-    right: 10px;
-    transform: translateY(-50%);
+    right: 2cqw;
 }
 
 .targetButton {
     background: #f5aa00;
-    border: 0px solid #222;
+    border: 0 solid #222;
     border-radius: 0;
-    font-size: 24px;
+    font-size: 3cqw;
     font-weight: bold;
     cursor: pointer;
 }
 .target0 {
+    width: 7cqw;
+    height: 18cqh;
     transform: translateY(-50%);
 }
 .target1 {
-    width: 90px;
-    height: 320px;
+    width: 15cqw;
+    height: 106.67cqh;
     transform: translateY(-50%);
     clip-path: polygon(
         0% 25%,
@@ -232,8 +210,8 @@ button,
 }
 
 .target2 {
-    width: 60px;
-    height: 160px;
+    width: 10cqw;
+    height: 53.33cqh;
     transform: translateY(-50%);
     clip-path: polygon(
         0% 25%,
@@ -244,8 +222,8 @@ button,
 }
 
 .target3 {
-    width: 60px;
-    height: 80px;
+    width: 10cqw;
+    height: 26.67cqh;
     transform: translateY(-50%);
     clip-path: polygon(
         0% 50%,
@@ -254,10 +232,7 @@ button,
         0% 50%
     );
 }
-.rightTargets {
-    right: 120px;
-    transform: scaleX(1);
-}
+
 .rightTargets .target1 {
     clip-path: polygon(
         100% 25%,
@@ -286,14 +261,15 @@ button,
     );
 }
 .redButton {
-    width: 40px;
-    height: 60px;
+    width: 5cqw;
+    height: 20cqh;
     background: #f52500;
     border: 0px solid #222;
     border-radius: 0px;
-    font-size: 16px;
+    font-size: 1.6cqw;
     font-weight: bold;
     cursor: pointer;
+    transform: translateY(-50%);
     clip-path: polygon(
         0% 0%,
         50% 0%,
@@ -315,7 +291,7 @@ button,
 }
 
 .redButton:active {
-    transform: scale(0.96);
+    transform: scale(0.96) translateY(-50%);
 }
 .targetButton:hover {
     filter: brightness(1.15);
