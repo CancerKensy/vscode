@@ -93,6 +93,7 @@ button,
     transition: background 0.15s ease;
 }
 
+
 .fieldPlayer {
     background-color: rgba(255, 255, 255, 1);
     position: absolute;
@@ -329,9 +330,8 @@ button,
     opacity: 0.5;
 }
 .gameField:hover:not(:has(.targetButton:hover)):not(:has(.redButton:hover)) {
-    filter: brightness(1.15);
+    background: #032644;
 }
 .gameField:active:not(:has(.targetButton:active)):not(:has(.redButton:active)) {
-    filter: brightness(0.96);
-    transform: scale(1);
+    background: #032039;
 }
