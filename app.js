@@ -1,9 +1,13 @@
 let players = JSON.parse(localStorage.getItem("players")) || [];
 let currentGame = JSON.parse(localStorage.getItem("currentGame")) || null;
+if (currentGame && !currentGame.fieldCounts) {
+    currentGame.fieldCounts = createEmptyFieldCounts();
+}
 let gameTimer = null;
 let roundTransition = false;
 let undoStack = JSON.parse(localStorage.getItem("undoStack")) || [];
 let redoStack = JSON.parse(localStorage.getItem("redoStack")) || [];
+const maxHistoryEntries = 100;
 const pressState = {};
 const doubleClickDelay = 350;
 const longPressDelay = 500;
@@ -22,8 +26,20 @@ const horizontalMap = {
     bottomLeft: "bottomRight",
     bottomRight: "bottomLeft"
 };
+function createEmptyFieldCounts() {
+    return {
+        "-3": 0,
+        "-2": 0,
+        "-1": 0,
+        "0": 0,
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "red1": 0,
+        "red-1": 0
+    };
+}
 function debugLog(...args) {
-
     const text = args
         .map(x =>
             typeof x === "object"
@@ -31,25 +47,73 @@ function debugLog(...args) {
                 : String(x)
         )
         .join(" ");
+    
+    const lineText = `[${getGameTimestamp()}] ${text}`;
+    const id = Date.now() + "_" + Math.random();
+    const logs =
+        JSON.parse(localStorage.getItem("debugLog"))
+        || [];
 
-    console.log(text);
+    logs.push({
+        id: id,
+        text: lineText,
+        undone: false
+    });
+
+    while (logs.length > 1000) {
+        logs.shift();
+    }
+
+    localStorage.setItem(
+        "debugLog",
+        JSON.stringify(logs)
+    );
 
     const div =
         document.getElementById("debugConsole");
 
-    if (!div)
-        return;
+    if (!div) return;
 
     const line =
         document.createElement("div");
-
-    line.textContent =
-        `[${new Date().toLocaleTimeString()}] ${text}`;
+    line.id = id;
+    line.textContent = lineText;
 
     div.appendChild(line);
 
     div.scrollTop =
         div.scrollHeight;
+    return id;
+}
+function restoreDebugLog() {
+
+    const logs =
+        JSON.parse(localStorage.getItem("debugLog"))
+        || [];
+
+    const div =
+        document.getElementById("debugConsole");
+
+    if (!div) return;
+
+    div.innerHTML = "";
+
+    logs.forEach(log => {
+
+        const line =
+            document.createElement("div");
+
+        line.id = log.id;
+        line.textContent = log.text;
+
+        if (log.undone) {
+            line.classList.add("debugUndone");
+        }
+
+        div.appendChild(line);
+    });
+
+    div.scrollTop = div.scrollHeight;
 }
 function savePlayers() {
     localStorage.setItem("players", JSON.stringify(players));
@@ -75,35 +139,75 @@ function commitGameAction(actionFunction) {
     if (!currentGame) return;
 
     undoStack.push(cloneGame(currentGame));
+    while (undoStack.length > maxHistoryEntries) {
+        undoStack.shift();
+    }
     redoStack = [];
-
+    while (redoStack.length > maxHistoryEntries) {
+        redoStack.shift();
+    }
     actionFunction();
 
     saveCurrentGame();
     saveHistory();
+
     renderGameInfo();
+
+    requestAnimationFrame(() => {
+        updateAllFieldCountDisplays();
+        restoreDebugLog();
+    });
 }
 
 function undoGameAction() {
     if (!currentGame || undoStack.length === 0) return;
+
+    const previousGame = undoStack[undoStack.length - 1];
+
+    const removedEvents =
+        currentGame.events.slice(previousGame.events.length);
+
+    removedEvents.forEach(event => {
+        if (event?.logId) {
+            markLogUndone(event.logId);
+        }
+    });
 
     redoStack.push(cloneGame(currentGame));
     currentGame = undoStack.pop();
 
     saveCurrentGame();
     saveHistory();
+
     renderGameInfo();
+    restoreDebugLog();
 }
 
 function redoGameAction() {
     if (!currentGame || redoStack.length === 0) return;
 
     undoStack.push(cloneGame(currentGame));
-    currentGame = redoStack.pop();
+    while (undoStack.length > maxHistoryEntries) {
+        undoStack.shift();
+    }
+    const redoneGame = redoStack.pop();
+
+    const addedEvents =
+        redoneGame.events.slice(currentGame.events.length);
+
+    addedEvents.forEach(event => {
+        if (event?.logId) {
+            markLogRedone(event.logId);
+        }
+    });
+
+    currentGame = redoneGame;
 
     saveCurrentGame();
     saveHistory();
+
     renderGameInfo();
+    restoreDebugLog();
 }
 function addPlayer() {
     const input = document.getElementById("newPlayerName");
@@ -244,6 +348,14 @@ function getLastSelection() {
 }
 
 function startGame() {
+    localStorage.removeItem("debugLog");
+
+    const debugConsole =
+        document.getElementById("debugConsole");
+
+    if (debugConsole) {
+        debugConsole.innerHTML = "";
+    }
     saveLastSelection();
 
     const mode = document.getElementById("mode").value;
@@ -303,6 +415,17 @@ function startGame() {
         turnInRound: 0,
         startIndex: null,
         startSelectionActive: true,
+        fieldCounts: {
+            "-3": 0,
+            "-2": 0,
+            "-1": 0,
+            "0": 0,
+            "1": 0,
+            "2": 0,
+            "3": 0,
+            "red1": 0,
+            "red-1": 0
+        },
         events: []
     };
     undoStack = [];
@@ -336,12 +459,24 @@ function nextTurn() {
         currentGame.turnInRound++;
 
         if (currentGame.turnInRound >= 4) {
+            const finishedRound = currentGame.round;
+            const roundResultMessage = getRoundResultMessage(finishedRound);
+            const resultLogId = debugLog(roundResultMessage);
+
+            currentGame.events.push({
+                type: "round_result",
+                round: finishedRound,
+                timestamp: Date.now(),
+                logId: resultLogId
+            });
+
             currentGame.turnInRound = 0;
             currentGame.round++;
+            currentGame.fieldCounts = createEmptyFieldCounts();
 
             const nextStartPosition =
                 currentGame.startOrder[
-                (currentGame.round - 1) % 4
+                    (currentGame.round - 1) % 4
                 ];
 
             currentGame.startPosition = nextStartPosition;
@@ -349,9 +484,31 @@ function nextTurn() {
                 startPattern.indexOf(nextStartPosition);
 
             currentGame.roundTransitionUntil = Date.now() + 1000;
+
+            const roundLogId = debugLog(`Runde ${currentGame.round}`);
+
+            currentGame.events.push({
+                type: "round_start",
+                round: currentGame.round,
+                timestamp: Date.now(),
+                logId: roundLogId
+            });
         } else {
             currentGame.roundTransitionUntil = null;
         }
+
+        const currentPlayer = getCurrentPlayerInfo();
+        const turnLogId = debugLog(`${currentPlayer.playerName} ist dran.`);
+
+        currentGame.events.push({
+            type: "turn_start",
+            playerId: currentPlayer.playerId,
+            teamIndex: currentPlayer.teamIndex,
+            round: currentGame.round,
+            turnInRound: currentGame.turnInRound,
+            timestamp: Date.now(),
+            logId: turnLogId
+        });
     });
 }
 function getOrderFromStart(start) {
@@ -376,8 +533,31 @@ function selectStartPlayer(position) {
     currentGame.startSelectionActive = false;
     currentGame.roundTransitionUntil = null;
 
+    const roundLogId = debugLog(`Runde ${currentGame.round}`);
+
+    currentGame.events.push({
+        type: "round_start",
+        round: currentGame.round,
+        timestamp: Date.now(),
+        logId: roundLogId
+    });
+
+    const currentPlayer = getCurrentPlayerInfo();
+    const turnLogId = debugLog(`${currentPlayer.playerName} ist dran.`);
+
+    currentGame.events.push({
+        type: "turn_start",
+        playerId: currentPlayer.playerId,
+        teamIndex: currentPlayer.teamIndex,
+        round: currentGame.round,
+        turnInRound: currentGame.turnInRound,
+        timestamp: Date.now(),
+        logId: turnLogId
+    });
+
     saveCurrentGame();
     renderGameInfo();
+    restoreDebugLog();
 }
 function getCurrentTurnPosition() {
     if (!currentGame) return null;
@@ -430,6 +610,7 @@ function renderGameInfo() {
     const gameInfo = document.getElementById("gameInfo");
     if (!currentGame) {
         gameInfo.innerHTML = "";
+        restoreDebugLog();
         return;
     }
     let roundInfo = "";
@@ -480,34 +661,31 @@ function renderGameInfo() {
             ${t2Right}
         </div>
         <div class="sideTargets leftTargets">
-            <button class="targetButton target3" onpointerdown="targetPointerDown(event, 3)" onpointerup="targetPointerUp(event, 3)" onpointercancel="targetPointerCancel(3)" onpointerleave="targetPointerCancel(3)">3</button>
-            <button class="targetButton target2" onpointerdown="targetPointerDown(event, 2)" onpointerup="targetPointerUp(event, 2)" onpointercancel="targetPointerCancel(2)" onpointerleave="targetPointerCancel(2)">2</button>
-            <button class="targetButton target1" onpointerdown="targetPointerDown(event, 1)" onpointerup="targetPointerUp(event, 1)" onpointercancel="targetPointerCancel(1)" onpointerleave="targetPointerCancel(1)">1</button>
+            <button class="targetButton target3" id="${getFieldDomId(3)}" onpointerdown="targetPointerDown(event, 3)" onpointerup="targetPointerUp(event, 3)" onpointercancel="targetPointerCancel(3)" onpointerleave="targetPointerCancel(3)">${getFieldCount(3)}</button>
+            <button class="targetButton target2" id="${getFieldDomId(2)}" onpointerdown="targetPointerDown(event, 2)" onpointerup="targetPointerUp(event, 2)" onpointercancel="targetPointerCancel(2)" onpointerleave="targetPointerCancel(2)">${getFieldCount(2)}</button>
+            <button class="targetButton target1" id="${getFieldDomId(1)}" onpointerdown="targetPointerDown(event, 1)" onpointerup="targetPointerUp(event, 1)" onpointercancel="targetPointerCancel(1)" onpointerleave="targetPointerCancel(1)">${getFieldCount(1)}</button>
         </div>
+
         <div class="sideTargets middleTargets">
-            <button class="targetButton" onpointerdown="targetPointerDown(event, 0)" onpointerup="targetPointerUp(event, 0)" onpointercancel="targetPointerCancel(0)" onpointerleave="targetPointerCancel(0)">0</button>
+            <button class="targetButton target0" id="${getFieldDomId(0)}" onpointerdown="targetPointerDown(event, 0)" onpointerup="targetPointerUp(event, 0)" onpointercancel="targetPointerCancel(0)" onpointerleave="targetPointerCancel(0)">${getFieldCount(0)}</button>
         </div>
-        
+
         <div class="redTargets leftredTargets">
-            <button class="redButton"
-                onpointerdown="targetPointerDown(event, 'red1')"
-                onpointerup="targetPointerUp(event, 'red1')"
-                onpointercancel="targetPointerCancel('red1')"
-                onpointerleave="targetPointerCancel('red1')">1
+            <button class="redButton" id="${getFieldDomId('red1')}" onpointerdown="targetPointerDown(event, 'red1')" onpointerup="targetPointerUp(event, 'red1')" onpointercancel="targetPointerCancel('red1')" onpointerleave="targetPointerCancel('red1')">
+                ${getFieldCount("red1")}
             </button>
         </div>
+
         <div class="redTargets rightredTargets">
-            <button class="redButton"
-                onpointerdown="targetPointerDown(event, 'red-1')"
-                onpointerup="targetPointerUp(event, 'red-1')"
-                onpointercancel="targetPointerCancel('red-1')"
-                onpointerleave="targetPointerCancel('red-1')">1
+            <button class="redButton" id="${getFieldDomId('red-1')}" onpointerdown="targetPointerDown(event, 'red-1')" onpointerup="targetPointerUp(event, 'red-1')" onpointercancel="targetPointerCancel('red-1')" onpointerleave="targetPointerCancel('red-1')">
+                ${getFieldCount("red-1")}
             </button>
         </div>
+
         <div class="sideTargets rightTargets">
-            <button class="targetButton target3" onpointerdown="targetPointerDown(event, -3)" onpointerup="targetPointerUp(event, -3)" onpointercancel="targetPointerCancel(-3)" onpointerleave="targetPointerCancel(-3)">3</button>
-            <button class="targetButton target2" onpointerdown="targetPointerDown(event, -2)" onpointerup="targetPointerUp(event, -2)" onpointercancel="targetPointerCancel(-2)" onpointerleave="targetPointerCancel(-2)">2</button>
-            <button class="targetButton target1" onpointerdown="targetPointerDown(event, -1)" onpointerup="targetPointerUp(event, -1)" onpointercancel="targetPointerCancel(-1)" onpointerleave="targetPointerCancel(-1)">1</button>
+            <button class="targetButton target1" id="${getFieldDomId(-1)}" onpointerdown="targetPointerDown(event, -1)" onpointerup="targetPointerUp(event, -1)" onpointercancel="targetPointerCancel(-1)" onpointerleave="targetPointerCancel(-1)">${getFieldCount(-1)}</button>
+            <button class="targetButton target2" id="${getFieldDomId(-2)}" onpointerdown="targetPointerDown(event, -2)" onpointerup="targetPointerUp(event, -2)" onpointercancel="targetPointerCancel(-2)" onpointerleave="targetPointerCancel(-2)">${getFieldCount(-2)}</button>
+            <button class="targetButton target3" id="${getFieldDomId(-3)}" onpointerdown="targetPointerDown(event, -3)" onpointerup="targetPointerUp(event, -3)" onpointercancel="targetPointerCancel(-3)" onpointerleave="targetPointerCancel(-3)">${getFieldCount(-3)}</button>
         </div>
     </div>
 `;
@@ -533,6 +711,9 @@ function renderGameInfo() {
 
 
         ${roundInfo}
+        <div style="text-align:center;">
+            ${getScoreDisplay()}
+        </div>
         ${fieldHtml}
         <button onclick="endGame()">Spiel beenden</button>
     `;
@@ -657,28 +838,414 @@ function targetPointerCancel(value) {
 }
 
 function handleTargetInput(value, isLongPress) {
-    if (String(value).startsWith("red")) {
-        const side = Number(String(value).replace("red", ""));
+    if (!currentGame || currentGame.startSelectionActive) return;
 
-        debugLog(
-            isLongPress ? "ROT LANG" : "ROT KURZ",
-            side
-        );
+    if (!currentGame.fieldCounts) {
+        currentGame.fieldCounts = {};
+    }
+
+    const key = getFieldKey(value);
+
+    if (currentGame.fieldCounts[key] === undefined) {
+        currentGame.fieldCounts[key] = 0;
+    }
+
+    const player = getCurrentPlayerInfo();
+    const fieldValue = getFieldAbsValue(value);
+    const isOwn = isOwnFieldForTeam(value, player.teamIndex);
+    if (value === 0 && isLongPress) {
+        isLongPress = false;
+    }
+    if (!isLongPress) {
+        commitGameAction(() => {
+            currentGame.fieldCounts[key]++;
+            updateFieldCountDisplay(value);
+            const scoreText = isOwn
+                ? `-${fieldValue}`
+                : `+${fieldValue}`;
+            
+            let message;
+
+            if (value === "red1" || value === "red-1") {
+
+                if (isOwn) {
+                    message =
+                        `${player.playerName} aus ${player.teamName} trifft eigenen roten (-1 rot)`;
+                } else {
+                    message =
+                        `${player.playerName} aus ${player.teamName} trifft gegnerischen roten (+1 rot)`;
+                }
+
+            } else if (fieldValue === 0) {
+
+                message =
+                    `${player.playerName} aus ${player.teamName} trifft Mitte (0)`;
+
+            } else if (isOwn) {
+
+                message =
+                    `${player.playerName} aus ${player.teamName} trifft eigene ${fieldValue} (-${fieldValue})`;
+
+            } else {
+
+                message =
+                    `${player.playerName} aus ${player.teamName} trifft gegnerische ${fieldValue} (+${fieldValue})`;
+            }
+
+            const logId = debugLog(message);
+
+            currentGame.events.push({
+                type: "field_add",
+                value: value,
+                fieldValue: fieldValue,
+                isOwn: isOwn,
+                playerId: player.playerId,
+                teamIndex: player.teamIndex,
+                timestamp: Date.now(),
+                logId: logId
+            });
+        });
 
         return;
     }
 
-    debugLog(
-        isLongPress ? "TARGET LANG" : "TARGET KURZ",
-        value
-    );
+    if (currentGame.fieldCounts[key] <= 0) {
+        debugLog(
+            `${player.playerName} aus ${player.teamName} kann auf Feld ${fieldValue} keinen Korken löschen`
+        );
+        return;
+    }
+
+    commitGameAction(() => {
+        currentGame.fieldCounts[key]--;
+        updateFieldCountDisplay(value);
+        const scoreText = isOwn
+            ? `+${fieldValue}`
+            : `-${fieldValue}`;
+
+        let message;
+
+        if (value === "red1" || value === "red-1") {
+
+            if (isOwn) {
+                message =
+                    `${player.playerName} aus ${player.teamName} löscht Korken auf eigenem roten (+1 rot)`;
+            } else {
+                message =
+                    `${player.playerName} aus ${player.teamName} löscht Korken auf gegnerischem roten (-1 rot)`;
+            }
+
+        } else if (fieldValue === 0) {
+
+            message =
+                `${player.playerName} aus ${player.teamName} löscht Korken auf Mitte (0)`;
+
+        } else if (isOwn) {
+
+            message =
+                `${player.playerName} aus ${player.teamName} löscht Korken auf eigener ${fieldValue} (+${fieldValue})`;
+
+        } else {
+
+            message =
+                `${player.playerName} aus ${player.teamName} löscht Korken auf gegnerischer ${fieldValue} (-${fieldValue})`;
+        }
+
+        const logId = debugLog(message);
+
+        currentGame.events.push({
+            type: "field_remove",
+            value: value,
+            fieldValue: fieldValue,
+            isOwn: isOwn,
+            playerId: player.playerId,
+            teamIndex: player.teamIndex,
+            timestamp: Date.now(),
+            logId: logId
+        });
+    });
 }
 const last = getLastSelection();
+function getGameTimestamp() {
 
-if (last.mode) {
-    document.getElementById("mode").value = last.mode;
+    if (!currentGame) {
+        return "00:00";
+    }
+
+    const start = new Date(currentGame.startTime);
+
+    let diffSeconds =
+        Math.floor(
+            (Date.now() - start.getTime()) / 1000
+        );
+
+    const days =
+        Math.floor(diffSeconds / 86400);
+
+    diffSeconds %= 86400;
+
+    const hours =
+        Math.floor(diffSeconds / 3600);
+
+    diffSeconds %= 3600;
+
+    const minutes =
+        Math.floor(diffSeconds / 60);
+
+    const seconds =
+        diffSeconds % 60;
+
+    if (days > 0) {
+        return `${days}:${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+    }
+
+    if (hours > 0) {
+        return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+    }
+
+    return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+function getFieldKey(value) {
+    return String(value);
 }
 
+function getFieldCount(value) {
+    if (!currentGame || !currentGame.fieldCounts) return 0;
+
+    const key = getFieldKey(value);
+    return currentGame.fieldCounts[key] || 0;
+}
+
+function getCurrentPlayerInfo() {
+    const position = getCurrentTurnPosition();
+
+    const positionToTeam = {
+        topLeft: 0,
+        bottomLeft: 0,
+        bottomRight: 1,
+        topRight: 1
+    };
+
+    const positionToPlayerIndex = {
+        topLeft: 0,
+        bottomLeft: 1,
+        bottomRight: 0,
+        topRight: 1
+    };
+
+    const teamIndex = positionToTeam[position];
+    const playerIndex = positionToPlayerIndex[position];
+
+    const playerId = currentGame.teams[teamIndex][playerIndex];
+
+    return {
+        playerId: playerId,
+        playerName: getPlayerName(playerId),
+        teamIndex: teamIndex,
+        teamName: `Team ${teamIndex + 1}`,
+        position: position
+    };
+}
+
+function isOwnFieldForTeam(value, teamIndex) {
+
+    if (value === 0) {
+        return null;
+    }
+
+    if (value === "red1") {
+        return teamIndex === 0;
+    }
+
+    if (value === "red-1") {
+        return teamIndex === 1;
+    }
+
+    const numericValue = Number(value);
+
+    if (teamIndex === 0) {
+        return numericValue > 0;
+    }
+
+    return numericValue < 0;
+}
+
+function getFieldAbsValue(value) {
+
+    if (value === 0) {
+        return 0;
+    }
+
+    if (
+        value === "red1" ||
+        value === "red-1"
+    ) {
+        return 1;
+    }
+
+    return Math.abs(Number(value));
+}
+
+function markLogUndone(logId) {
+
+    let logs =
+        JSON.parse(localStorage.getItem("debugLog"))
+        || [];
+
+    const entry =
+        logs.find(x => x.id === logId);
+
+    if (entry) {
+        entry.undone = true;
+    }
+
+    localStorage.setItem(
+        "debugLog",
+        JSON.stringify(logs)
+    );
+
+    const el =
+        document.getElementById(logId);
+
+    if (el) {
+        el.classList.add("debugUndone");
+    }
+}
+function markLogRedone(logId) {
+    let logs =
+        JSON.parse(localStorage.getItem("debugLog"))
+        || [];
+
+    const entry =
+        logs.find(x => x.id === logId);
+
+    if (entry) {
+        entry.undone = false;
+    }
+
+    localStorage.setItem(
+        "debugLog",
+        JSON.stringify(logs)
+    );
+
+    const el =
+        document.getElementById(logId);
+
+    if (el) {
+        el.classList.remove("debugUndone");
+    }
+}
+function getCurrentScore() {
+    if (!currentGame || !currentGame.fieldCounts) {
+        return {
+            team1: 0,
+            team2: 0,
+            team1OwnRed: false,
+            team1EnemyRed: false,
+            team2OwnRed: false,
+            team2EnemyRed: false
+        };
+    }
+
+    const c = currentGame.fieldCounts;
+
+    const leftScore =
+        (c["1"] || 0) * 1 +
+        (c["2"] || 0) * 2 +
+        (c["3"] || 0) * 3;
+
+    const rightScore =
+        (c["-1"] || 0) * 1 +
+        (c["-2"] || 0) * 2 +
+        (c["-3"] || 0) * 3;
+
+    return {
+        team1: rightScore,
+        team2: leftScore,
+
+        team1OwnRed: false,
+        team1EnemyRed: false,
+
+        team2OwnRed: (c["red1"] || 0) > 0,
+        team2EnemyRed: (c["red-1"] || 0) > 0
+    };
+}
+
+function formatTeamScore(points, ownRed) {
+
+    if (ownRed) {
+        return `${points}+rot`;
+    }
+
+    return String(points);
+}
+function getRoundResultMessage(roundNumber) {
+    const score = getCurrentScore();
+    const c = currentGame.fieldCounts;
+
+    const team1Points = score.team1;
+    const team2Points = score.team2;
+
+   const diff = Math.abs(team1Points - team2Points);
+
+    const winningTeam =
+        team1Points > team2Points
+            ? 1
+            : team2Points > team1Points
+                ? 2
+                : 0;
+
+    const team1OwnRed = (c["red1"] || 0) > 0;
+    const team1EnemyRed = (c["red-1"] || 0) > 0;
+
+    const team2OwnRed = (c["red-1"] || 0) > 0;
+    const team2EnemyRed = (c["red1"] || 0) > 0;
+
+    let parts = [`Ende Runde ${roundNumber}:`];
+
+    if (team1OwnRed && team2OwnRed) {
+        parts.push("Beide Teams müssen ihre Biere exen.");
+    } else if (team1OwnRed) {
+        parts.push("Team 1 muss ihre Biere exen.");
+    } else if (team2OwnRed) {
+        parts.push("Team 2 muss ihre Biere exen.");
+    }
+
+    parts.push(
+    winningTeam === 0
+        ? "Nullerrunde."
+        : `Team ${winningTeam} darf ${diff === 1 ? "einen Schluck" : diff + " Schlücke"} trinken.`
+    );
+
+    return parts.join(" ");
+}
+function getScoreDisplay() {
+
+    const score = getCurrentScore();
+
+    return `${formatTeamScore(
+        score.team1,
+        (currentGame.fieldCounts["red-1"] || 0) > 0
+    )}:${formatTeamScore(
+        score.team2,
+        (currentGame.fieldCounts["red1"] || 0) > 0
+    )}`;
+}
+function getFieldDomId(value) {
+    return "fieldCount_" + String(value).replace("-", "minus").replace("red", "red_");
+}
+
+function updateFieldCountDisplay(value) {
+    const el = document.getElementById(getFieldDomId(value));
+
+    if (el) {
+        el.textContent = getFieldCount(value);
+    }
+}
+
+function updateAllFieldCountDisplays() {
+    [3, 2, 1, 0, -1, -2, -3, "red1", "red-1"].forEach(updateFieldCountDisplay);
+}
 renderPlayerList();
 renderPlayerSelection();
 
@@ -693,11 +1260,9 @@ if (currentGame) {
     saveCurrentGame();
     startGameTimer();
 }
-
 renderGameInfo();
-document.addEventListener("contextmenu", event => {
-    event.preventDefault();
-});
+restoreDebugLog();
+
 
 document.addEventListener("selectstart", event => {
     event.preventDefault();
@@ -706,10 +1271,6 @@ document.addEventListener("selectstart", event => {
 document.addEventListener("dragstart", event => {
     event.preventDefault();
 });
-window.addEventListener("contextmenu", function (event) {
-    event.preventDefault();
-    return false;
-}, { capture: true });
 
 window.addEventListener("selectstart", function (event) {
     event.preventDefault();
@@ -720,3 +1281,17 @@ window.addEventListener("dragstart", function (event) {
     event.preventDefault();
     return false;
 }, { capture: true });
+
+const isTouchDevice =
+    window.matchMedia("(pointer: coarse)").matches;
+
+if (isTouchDevice) {
+    document.addEventListener("contextmenu", event => {
+        event.preventDefault();
+    });
+
+    window.addEventListener("contextmenu", function (event) {
+        event.preventDefault();
+        return false;
+    }, { capture: true });
+}
