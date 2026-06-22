@@ -26,6 +26,47 @@ const horizontalMap = {
     bottomLeft: "bottomRight",
     bottomRight: "bottomLeft"
 };
+let fieldPressTimer = null;
+let fieldLongPress = false;
+
+function fieldPointerDown(event) {
+
+    if (
+        event.target.closest(".targetButton") ||
+        event.target.closest(".redButton") ||
+        event.target.closest(".fieldPlayer")
+    ) {
+        return;
+    }
+
+    fieldLongPress = false;
+
+    fieldPressTimer = setTimeout(() => {
+        fieldLongPress = true;
+        handleTargetInput(0, true);
+    }, 500);
+}
+
+function fieldPointerUp(event) {
+
+    if (
+        event.target.closest(".targetButton") ||
+        event.target.closest(".redButton") ||
+        event.target.closest(".fieldPlayer")
+    ) {
+        return;
+    }
+
+    clearTimeout(fieldPressTimer);
+
+    if (!fieldLongPress) {
+        handleTargetInput(0, false);
+    }
+}
+
+function fieldPointerCancel() {
+    clearTimeout(fieldPressTimer);
+}
 function createEmptyFieldCounts() {
     return {
         "-3": 0,
@@ -636,7 +677,11 @@ function renderGameInfo() {
     const startMode = currentGame.startSelectionActive;
 
     const fieldHtml = `
-    <div class="gameField ${startMode ? "startSelectField" : ""}">
+    <div class="gameField ${startMode ? "startSelectField" : ""}"
+    onpointerdown="targetPointerDown(event, 0)"
+    onpointerup="targetPointerUp(event, 0)"
+    onpointercancel="targetPointerCancel(0)"
+    onpointerleave="targetPointerCancel(0)">
         <div
             class="fieldPlayer topLeft ${currentTurn === "topLeft" ? "activePlayer" : ""} ${startMode ? "startSelectable" : ""}"
             onclick="${startMode ? "selectStartPlayer('topLeft')" : ""}">
@@ -665,11 +710,6 @@ function renderGameInfo() {
             <button class="targetButton target2" id="${getFieldDomId(2)}" onpointerdown="targetPointerDown(event, 2)" onpointerup="targetPointerUp(event, 2)" onpointercancel="targetPointerCancel(2)" onpointerleave="targetPointerCancel(2)">${getFieldCount(2)}</button>
             <button class="targetButton target1" id="${getFieldDomId(1)}" onpointerdown="targetPointerDown(event, 1)" onpointerup="targetPointerUp(event, 1)" onpointercancel="targetPointerCancel(1)" onpointerleave="targetPointerCancel(1)">${getFieldCount(1)}</button>
         </div>
-
-        <div class="sideTargets middleTargets">
-            <button class="targetButton target0" id="${getFieldDomId(0)}" onpointerdown="targetPointerDown(event, 0)" onpointerup="targetPointerUp(event, 0)" onpointercancel="targetPointerCancel(0)" onpointerleave="targetPointerCancel(0)">${getFieldCount(0)}</button>
-        </div>
-
         <div class="redTargets leftredTargets">
             <button class="redButton" id="${getFieldDomId('red1')}" onpointerdown="targetPointerDown(event, 'red1')" onpointerup="targetPointerUp(event, 'red1')" onpointercancel="targetPointerCancel('red1')" onpointerleave="targetPointerCancel('red1')">
                 ${getFieldCount("red1")}
@@ -718,7 +758,6 @@ function renderGameInfo() {
         <button onclick="endGame()">Spiel beenden</button>
     `;
 }
-
 function getPlayerName(id) {
     const player = players.find(p => p.id === id);
     return player ? player.name : "Unbekannt";
@@ -770,6 +809,7 @@ function getPressKey(value) {
 
 function targetPointerDown(event, value) {
     event.preventDefault();
+    event.stopPropagation();
 
     const key = getPressKey(value);
 
@@ -800,6 +840,7 @@ function targetPointerDown(event, value) {
 
 function targetPointerUp(event, value) {
     event.preventDefault();
+    event.stopPropagation();
 
     const key = getPressKey(value);
     const state = pressState[key];
@@ -879,7 +920,7 @@ function handleTargetInput(value, isLongPress) {
             } else if (fieldValue === 0) {
 
                 message =
-                    `${player.playerName} aus ${player.teamName} trifft Mitte (0)`;
+                    `${player.playerName} aus ${player.teamName} trifft nischt (0)`;
 
             } else if (isOwn) {
 

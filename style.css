@@ -87,12 +87,14 @@ button,
     margin-top: 20px;
     border: 0.4cqw solid #222;
     border-radius: 1cqw;
-    background: #fafafa;
     overflow: hidden;
     container-type: size;
+    background: #03213b ;
+    transition: background 0.15s ease;
 }
 
 .fieldPlayer {
+    background-color: rgba(255, 255, 255, 1);
     position: absolute;
     font-size: 2cqw;
     padding: 0.8cqw 1.2cqw;
@@ -106,6 +108,7 @@ button,
 .topRight { top: 3cqh; right: 2cqw; }
 
 .activePlayer {
+    background-color: rgba(255, 255, 255, 1);
     border: 0.45cqw solid #33ff00;
     box-shadow: 0 0 2cqw #33ff00;
     font-size: 2.4cqw;
@@ -324,4 +327,11 @@ button,
 .debugUndone {
     text-decoration: line-through;
     opacity: 0.5;
+}
+.gameField:hover:not(:has(.targetButton:hover)):not(:has(.redButton:hover)) {
+    filter: brightness(1.15);
+}
+.gameField:active:not(:has(.targetButton:active)):not(:has(.redButton:active)) {
+    filter: brightness(0.96);
+    transform: scale(1);
 }
