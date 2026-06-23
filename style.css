@@ -146,10 +146,10 @@ button,
     z-index: 20;
 }
 
-.topLeft { top: 4cqw; left: 4cqw; }
-.bottomLeft { bottom: 4cqw; left: 4cqw; }
-.bottomRight { bottom: 4cqw; right: 4cqw; }
-.topRight { top: 4cqw; right: 4cqw; }
+.topLeft { top: 1cqw; left: 7cqw; }
+.bottomLeft { bottom: 1cqw; left: 7cqw; }
+.bottomRight { bottom: 1cqw; right: 7cqw; }
+.topRight { top: 1cqw; right: 7cqw; }
 
 .activePlayer {
     background-color: rgba(255, 255, 255, 1);
@@ -379,11 +379,11 @@ button,
     opacity: 0.5;
     color: #66aaff;
 }
-.gameField:hover:not(:has(.targetButton:hover)):not(:has(.redButton:hover)):not(:has(.playerCapButton:hover)):not(:has(.fieldPlayer:hover)) {
+.gameField:not(.startSelectField):not(.roundPauseField):hover:not(:has(.targetButton:hover)):not(:has(.redButton:hover)):not(:has(.playerCapButton:hover)):not(:has(.fieldPlayer:hover)) {
     background: #093a64;
 }
-.gameField:active:not(:has(.targetButton:active)):not(:has(.redButton:active)):not(:has(.playerCapButton:active)):not(:has(.fieldPlayer:active)) {
-    background: #063055; 
+.gameField:not(.startSelectField):not(.roundPauseField):active:not(:has(.targetButton:active)):not(:has(.redButton:active)):not(:has(.playerCapButton:active)):not(:has(.fieldPlayer:active)) {
+    background: #063055;
 }
 .debugMerged {
     text-decoration: line-through;
@@ -459,4 +459,214 @@ button,
 }
 .playerCapButton:active {
     transform: scale(0.96);
+}
+.playerStatsWrapper {
+    margin-top: 1.5cqw;
+    width: 100%;
+}
+
+.playerStatsWrapper h3 {
+    margin: 0.5cqw 0;
+    text-align: center;
+}
+
+.playerStatsScroll {
+    overflow-x: auto;
+    max-width: 100%;
+}
+
+.playerStatsTable {
+    border-collapse: collapse;
+    width: max-content;
+    min-width: 100%;
+    font-size: 1.2cqw;
+}
+
+.playerStatsTable th,
+.playerStatsTable td {
+    border: 1px solid #444;
+    padding: 0.35cqw 0.5cqw;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.playerStatsTable th:first-child,
+.playerStatsTable td:first-child {
+    position: sticky;
+    left: 0;
+    background: #ffffff;
+    text-align: left;
+    z-index: 2;
+}
+.teamEraserRow {
+    display: flex;
+    justify-content: space-between;
+    gap: 2cqw;
+    margin: 1cqw 0;
+}
+
+.teamEraserButton {
+    position: relative;
+    width: 18cqw;
+    min-height: 5cqw;
+    border: 0.25cqw solid #f5aa00;
+    background: #f5aa00;
+    color: #111;
+    font-size: 1.6cqw;
+    font-weight: bold;
+    cursor: pointer;
+    overflow: hidden;
+}
+
+.teamEraserButton:not(.teamEraserUsed):hover {
+    color: #111;
+}
+
+.teamEraserButton:not(.teamEraserUsed):not(.teamEraserInactive):not(.teamEraserLocked):hover::before,
+.teamEraserButton:not(.teamEraserUsed):not(.teamEraserInactive):not(.teamEraserLocked):hover::after {
+    content: "";
+    position: absolute;
+    left: 8%;
+    right: 8%;
+    top: 50%;
+    height: 0.45cqw;
+    background: red;
+    z-index: 2;
+    pointer-events: none;
+}
+
+.teamEraserButton:not(.teamEraserUsed):hover::before {
+    transform: rotate(35deg);
+}
+
+.teamEraserButton:not(.teamEraserUsed):hover::after {
+    transform: rotate(-35deg);
+}
+
+.teamEraserUsed {
+    opacity: 0.35;
+    filter: grayscale(1);
+    cursor: not-allowed;
+}
+.gameField.roundPauseField {
+    border-color: #272411;
+    pointer-events: none;
+}
+
+.gameField.roundPauseField::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    z-index: 10;
+    pointer-events: none;
+}
+
+.gameField.roundPauseField .targetButton,
+.gameField.roundPauseField .redButton,
+.gameField.roundPauseField .playerCapButton,
+.gameField.roundPauseField .fieldPlayer {
+    pointer-events: none;
+    opacity: 0.35;
+}
+
+.gameField.roundPauseField:hover,
+.gameField.roundPauseField:active {
+    background: #03213b;
+    filter: none;
+}
+
+
+
+.teamEraserInactive {
+    opacity: 0.65;
+    filter: grayscale(0.5);
+    cursor: not-allowed;
+}
+
+.teamEraserLocked {
+    opacity: 0.35;
+    filter: grayscale(1);
+    cursor: not-allowed;
+}
+
+.teamEraserUsed {
+    opacity: 0.35;
+    filter: grayscale(1);
+    cursor: not-allowed;
+}
+.playerBeerButton {
+    position: absolute;
+    width: 8cqw;
+    height: 4cqw;
+    border: 0.25cqw solid #f5aa00;
+    background: #f5aa00;
+    color: #111;
+    font-size: 1.2cqw;
+    font-weight: bold;
+    cursor: pointer;
+    overflow: hidden;
+    z-index: 40;
+    padding: 0;
+    margin: 0;
+}
+
+/* Positionen relativ zu den Spielern */
+.playerBeer_topLeft {
+    top: 7cqw;
+    left: 7cqw;
+}
+
+.playerBeer_bottomLeft {
+    bottom: 7cqw;
+    left: 7cqw;
+}
+
+.playerBeer_bottomRight {
+    bottom: 7cqw;
+    right: 7cqw;
+}
+
+.playerBeer_topRight {
+    top: 7cqw;
+    right: 7cqw;
+}
+
+/* während Runde sichtbar, aber nicht aktiv */
+.beerInactive {
+    opacity: 0.65;
+    filter: grayscale(0.5);
+    cursor: not-allowed;
+}
+
+.beerLocked {
+    opacity: 0.35;
+    filter: grayscale(1);
+    cursor: not-allowed;
+}
+
+.beerGameOver {
+    opacity: 1;
+    filter: none;
+    cursor: default;
+    pointer-events: none;
+}
+
+/* Hover-X nur bei wirklich aktivem Bier */
+.playerBeerButton:not(.beerInactive):not(.beerLocked):not(.beerGameOver):hover::before,
+.playerBeerButton:not(.beerInactive):not(.beerLocked):not(.beerGameOver):hover::after {
+    content: "";
+    position: absolute;
+    left: 8%;
+    right: 8%;
+    top: 50%;
+    height: 0.45cqw;
+    background: red;
+    z-index: 2;
+    pointer-events: none;
+}
+
+/* In der Pause nur aktive Bierbuttons klickbar */
+.gameField.roundPauseField .playerBeerButton:not(.beerInactive):not(.beerLocked):not(.beerGameOver) {
+    pointer-events: auto;
 }

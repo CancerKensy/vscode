@@ -17,6 +17,26 @@ if (currentGame && !currentGame.fieldCounts) {
 if (currentGame && !currentGame.playerCaps) {
     currentGame.playerCaps = createInitialPlayerCaps();
 }
+if (currentGame && !currentGame.teamEraserUsed) {
+    currentGame.teamEraserUsed = createInitialTeamErasers();
+}
+if (currentGame && currentGame.awaitingNextRound === undefined) {
+    currentGame.awaitingNextRound = false;
+}
+
+if (currentGame && currentGame.keepStartPlayerForNextRound === undefined) {
+    currentGame.keepStartPlayerForNextRound = false;
+}
+if (currentGame && !currentGame.playerBeers) {
+    currentGame.playerBeers = createInitialPlayerBeers();
+}
+
+if (currentGame && currentGame.beerWinnerTeamIndex === undefined) {
+    currentGame.beerWinnerTeamIndex = null;
+}
+if (currentGame && !currentGame.roundBeerActiveTeams) {
+    currentGame.roundBeerActiveTeams = [];
+}
 let gameTimer = null;
 let roundTransition = false;
 let undoStack = JSON.parse(localStorage.getItem("undoStack")) || [];
@@ -45,6 +65,67 @@ let fieldLongPress = false;
 function getNextStartPosition(currentStartPosition) {
     const index = startPattern.indexOf(currentStartPosition);
     return startPattern[(index + 1) % startPattern.length];
+}
+function createInitialPlayerBeers() {
+    return {
+        topLeft: false,
+        bottomLeft: false,
+        bottomRight: false,
+        topRight: false
+    };
+}
+function getTeamPositions(teamIndex) {
+    return teamIndex === 0
+        ? ["topLeft", "bottomLeft"]
+        : ["bottomRight", "topRight"];
+}
+
+function getTeamsThatMustEx() {
+    const c = currentGame.fieldCounts || {};
+    const teams = [];
+
+    if ((c["red1"] || 0) > 0) {
+        teams.push(0);
+    }
+
+    if ((c["red-1"] || 0) > 0) {
+        teams.push(1);
+    }
+
+    return teams;
+}
+
+function resetTeamBeersForEx(teamIndex) {
+    if (!currentGame.playerBeers) {
+        currentGame.playerBeers = createInitialPlayerBeers();
+    }
+
+    getTeamPositions(teamIndex).forEach(position => {
+        currentGame.playerBeers[position] = false;
+    });
+}
+
+function isPlayerBeerEmpty(position) {
+    if (!currentGame.playerBeers) {
+        currentGame.playerBeers = createInitialPlayerBeers();
+    }
+
+    return currentGame.playerBeers[position] === true;
+}
+
+function teamHasBothBeersEmpty(teamIndex) {
+    if (!currentGame.playerBeers) {
+        currentGame.playerBeers = createInitialPlayerBeers();
+    }
+
+    return getTeamPositions(teamIndex)
+        .every(position => currentGame.playerBeers[position] === true);
+}
+function createInitialTeamErasers() {
+    return {
+        "0": false,
+        "1": false
+    };
 }
 function fieldPointerDown(event) {
 
@@ -263,10 +344,13 @@ function undoGameAction() {
     });
 
     previousGame.events.forEach(e => {
-
         if (!e.logId) return;
 
-        markLogRedone(e.logId);
+        if (e.undone) {
+            markLogUndone(e.logId);
+        } else {
+            markLogRedone(e.logId);
+        }
 
         if (e.merged) {
             markLogMerged(e.logId);
@@ -303,7 +387,7 @@ function undoGameAction() {
     limitHistoryStack(redoStack);
 
     currentGame = previousGame;
-
+    syncGameTimerWithGameState();
     saveCurrentGame();
     saveHistory();
 
@@ -314,6 +398,52 @@ function undoGameAction() {
         updateAllPlayerCapDisplays();
         restoreDebugLog();
     });
+}
+function getPointDrinkingTeamIndex(options = {}) {
+    if (options.eraser) {
+        return null;
+    }
+
+    const score = getCurrentScore();
+
+    if (score.team1 > score.team2) {
+        return 0;
+    }
+
+    if (score.team2 > score.team1) {
+        return 1;
+    }
+
+    return null;
+}
+
+function getBeerActiveTeamsForCurrentRound(options = {}) {
+    const teams = new Set();
+
+    const pointTeam =
+        getPointDrinkingTeamIndex(options);
+
+    if (pointTeam !== null) {
+        teams.add(pointTeam);
+    }
+
+    getTeamsThatMustEx().forEach(teamIndex => {
+        teams.add(teamIndex);
+    });
+
+    return Array.from(teams);
+}
+
+function teamCanUseBeer(teamIndex) {
+    if (!currentGame || !currentGame.awaitingNextRound) {
+        return false;
+    }
+
+    if (!Array.isArray(currentGame.roundBeerActiveTeams)) {
+        currentGame.roundBeerActiveTeams = [];
+    }
+
+    return currentGame.roundBeerActiveTeams.includes(teamIndex);
 }
 function limitHistoryStack(stack) {
     while (stack.length > maxHistoryEntries) {
@@ -361,7 +491,17 @@ function redoGameAction() {
                 restoreDeletedLog(e.logId, e.logText);
             }
 
-            markLogRedone(e.logId);
+            if (e.undone) {
+                markLogUndone(e.logId);
+            } else {
+                markLogRedone(e.logId);
+            }
+        } else {
+            if (e.undone) {
+                markLogUndone(e.logId);
+            } else {
+                markLogRedone(e.logId);
+            }
         }
 
         if (e.merged) {
@@ -375,7 +515,7 @@ function redoGameAction() {
     limitHistoryStack(undoStack);
 
     currentGame = redoneGame;
-
+    syncGameTimerWithGameState();
     saveCurrentGame();
     saveHistory();
 
@@ -608,8 +748,35 @@ function playerCapPointerUp(event, position) {
         handlePlayerCapInput(position, false);
     }, doubleClickDelay);
 }
+function getLastRoundResultEventForCurrentRound() {
+    if (!currentGame || !currentGame.events) return null;
+
+    for (let i = currentGame.events.length - 1; i >= 0; i--) {
+        const event = currentGame.events[i];
+
+        if (
+            event.type === "round_result" &&
+            event.round === currentGame.round
+        ) {
+            return event;
+        }
+    }
+
+    return null;
+}
+
+function currentRoundAlreadyErased() {
+    const event =
+        getLastRoundResultEventForCurrentRound();
+
+    return event && event.eraser === true;
+}
 function handlePlayerCapInput(position, isLongPress) {
-    if (!currentGame || currentGame.startSelectionActive) return;
+   if (
+        !currentGame ||
+        currentGame.startSelectionActive ||
+        currentGame.awaitingNextRound
+    ) return;
 
     const currentPosition = getCurrentTurnPosition();
     const currentPlayer = getCurrentPlayerInfo();
@@ -634,8 +801,10 @@ function handlePlayerCapInput(position, isLongPress) {
 
             currentGame.events.push({
                 type: "player_cap_remove",
-                position: position,
+                position: currentPosition,
+                targetPosition: position,
                 playerId: currentPlayer.playerId,
+                teamIndex: currentPlayer.teamIndex,
                 timestamp: Date.now(),
                 logId: logId
             });
@@ -657,7 +826,9 @@ function handlePlayerCapInput(position, isLongPress) {
             type: "player_cap_move",
             from: currentPosition,
             to: position,
+            position: currentPosition,
             playerId: currentPlayer.playerId,
+            teamIndex: currentPlayer.teamIndex,
             timestamp: Date.now(),
             logId: logId
         });
@@ -682,6 +853,31 @@ function getPlayerNameByPosition(position) {
     const playerIndex = positionToPlayerIndex[position];
 
     return getPlayerName(currentGame.teams[teamIndex][playerIndex]);
+}
+function getMergeStatCategoryFromEvents(addEvent, removeEvent) {
+    const addValue = addEvent.fieldValue;
+    const removeValue = removeEvent.fieldValue;
+
+    let delta;
+    let suffix;
+
+    if (removeEvent.isOwn) {
+        // Beispiel: eigene 3 löschen und gegnerische 2 treffen => 1erlöscher
+        delta = removeValue - addValue;
+        suffix = "löscher";
+    } else {
+        // Gegnerfeld löschen/kicken und danach verrechnen
+        delta = removeValue - addValue;
+        suffix = "kick";
+    }
+
+    const value = Math.abs(delta);
+
+    if (value < 1 || value > 3) {
+        return null;
+    }
+
+    return `${value}er${suffix}`;
 }
 function startGame() {
     
@@ -767,6 +963,10 @@ function startGame() {
         playerCaps: createInitialPlayerCaps(),
         forcedTurnActive: false,
         forcedTurnQueue: [],
+        teamEraserUsed: createInitialTeamErasers(),
+        awaitingNextRound: false,
+        keepStartPlayerForNextRound: false,
+        roundBeerActiveTeams: [],
     };
     undoStack = [];
     redoStack = [];
@@ -778,6 +978,97 @@ function startGame() {
     document.getElementById("currentGameSection").style.display = "block";
     renderGameInfo();
     startGameTimer();
+}
+function getElapsedTime() {
+    if (!currentGame) return "00:00";
+
+    const start = new Date(currentGame.startTime);
+    const end = currentGame.endTime
+        ? new Date(currentGame.endTime)
+        : new Date();
+
+    const diffSeconds = Math.floor((end - start) / 1000);
+
+    const hours = Math.floor(diffSeconds / 3600);
+    const minutes = Math.floor((diffSeconds % 3600) / 60);
+    const seconds = diffSeconds % 60;
+
+    if (hours > 0) {
+        return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+    }
+
+    return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+function syncGameTimerWithGameState() {
+    if (!currentGame) {
+        stopGameTimer();
+        return;
+    }
+
+    if (currentGame.beerWinnerTeamIndex !== null) {
+        stopGameTimer();
+        updateElapsedTimeOnly();
+        return;
+    }
+
+    startGameTimer();
+}
+function startNextRoundAfterPause() {
+    
+    currentGame.awaitingNextRound = false;
+    currentGame.roundTransitionUntil = null;
+    currentGame.pendingRoundReset = false;
+
+    currentGame.turnInRound = 0;
+    currentGame.round++;
+    currentGame.roundBeerActiveTeams = [];
+
+    const nextStartPosition =
+        currentGame.keepStartPlayerForNextRound
+            ? currentGame.startPosition
+            : getNextStartPosition(currentGame.startPosition);
+
+    currentGame.keepStartPlayerForNextRound = false;
+
+    currentGame.startPosition = nextStartPosition;
+    currentGame.startIndex =
+        startPattern.indexOf(nextStartPosition);
+
+    currentGame.startOrder =
+        getOrderFromStart(nextStartPosition);
+
+    currentGame.fieldCounts = createEmptyFieldCounts();
+    currentGame.playerCaps = createInitialPlayerCaps();
+
+    currentGame.forcedTurnActive = false;
+    currentGame.forcedTurnQueue = [];
+
+    const roundLogId =
+        debugLog(`Runde ${currentGame.round}`);
+
+    currentGame.events.push({
+        type: "round_start",
+        round: currentGame.round,
+        timestamp: Date.now(),
+        logId: roundLogId
+    });
+
+    const startPlayer =
+        getPlayerInfoByPosition(currentGame.startPosition);
+
+    const turnLogId =
+        debugLog(`${startPlayer.playerName} startet.`);
+
+    currentGame.events.push({
+        type: "turn_start",
+        playerId: startPlayer.playerId,
+        teamIndex: startPlayer.teamIndex,
+        position: currentGame.startPosition,
+        round: currentGame.round,
+        turnInRound: currentGame.turnInRound,
+        timestamp: Date.now(),
+        logId: turnLogId
+    });
 }
 function getPlayerCapDomId(position) {
     return "playerCap_" + position;
@@ -831,9 +1122,19 @@ function getPlayerInfoByPosition(position) {
 }
 function nextTurn() {
     if (!currentGame) return;
-
+    if (currentGame.beerWinnerTeamIndex !== null) {
+        return;
+    }
     if (currentGame.startSelectionActive) {
         alert("Bitte zuerst Startspieler wählen.");
+        return;
+    }
+
+    if (currentGame.awaitingNextRound) {
+        commitGameAction(() => {
+            startNextRoundAfterPause();
+        });
+
         return;
     }
 
@@ -861,11 +1162,9 @@ function nextTurn() {
 
         if (wasForcedTurn) {
             currentGame.forcedTurnQueue.shift();
-
             activateNextForcedTurnOrStop();
         } else {
             currentGame.turnInRound++;
-
             activateNextForcedTurnOrStop();
         }
 
@@ -874,75 +1173,13 @@ function nextTurn() {
             !currentGame.forcedTurnActive &&
             currentGame.forcedTurnQueue.length === 0
         ) {
-            const finishedRound = currentGame.round;
-            const roundResultMessage = getRoundResultMessage(finishedRound);
-            const resultLogId = debugLog(roundResultMessage);
-
-            currentGame.events.push({
-                type: "round_result",
-                round: finishedRound,
-                timestamp: Date.now(),
-                logId: resultLogId
+            finishRound({
+                eraser: false,
+                keepStartPlayer: false
             });
-
-            currentGame.turnInRound = 0;
-            currentGame.round++;
-
-            const nextStartPosition =
-                getNextStartPosition(currentGame.startPosition);
-
-            currentGame.startPosition = nextStartPosition;
-            currentGame.startIndex =
-                startPattern.indexOf(nextStartPosition);
-
-            currentGame.startOrder =
-                getOrderFromStart(nextStartPosition);
-
-            currentGame.roundTransitionUntil = Date.now() + 1000;
-            currentGame.pendingRoundReset = true;
-
-            const roundLogId = debugLog(`Runde ${currentGame.round}`);
-
-            currentGame.events.push({
-                type: "round_start",
-                round: currentGame.round,
-                timestamp: Date.now(),
-                logId: roundLogId
-            });
-
-            const startPlayer =
-                getPlayerInfoByPosition(currentGame.startPosition);
-
-            const turnLogId =
-                debugLog(`${startPlayer.playerName} startet.`);
-
-            currentGame.events.push({
-                type: "turn_start",
-                playerId: startPlayer.playerId,
-                teamIndex: startPlayer.teamIndex,
-                round: currentGame.round,
-                turnInRound: currentGame.turnInRound,
-                timestamp: Date.now(),
-                logId: turnLogId
-            });
-
-            setTimeout(() => {
-                if (!currentGame || !currentGame.pendingRoundReset) return;
-
-                currentGame.fieldCounts = createEmptyFieldCounts();
-                currentGame.playerCaps = createInitialPlayerCaps();
-                currentGame.pendingRoundReset = false;
-                currentGame.roundTransitionUntil = null;
-
-                saveCurrentGame();
-                renderGameInfo();
-                restoreDebugLog();
-            }, 1000);
 
             return;
         }
-
-        currentGame.roundTransitionUntil = null;
 
         let nextPosition = getActiveTurnPosition();
 
@@ -972,7 +1209,16 @@ function nextTurn() {
 
             currentGame.turnInRound++;
 
-            if (currentGame.turnInRound >= 4) {
+            if (
+                currentGame.turnInRound >= 4 &&
+                !currentGame.forcedTurnActive &&
+                (!currentGame.forcedTurnQueue || currentGame.forcedTurnQueue.length === 0)
+            ) {
+                finishRound({
+                    eraser: false,
+                    keepStartPlayer: false
+                });
+
                 return;
             }
 
@@ -995,7 +1241,8 @@ function nextTurn() {
                     ? `${nextPlayer.playerName} startet.`
                     : `${nextPlayer.playerName} ist dran.`;
 
-        const turnLogId = debugLog(turnMessage);
+        const turnLogId =
+            debugLog(turnMessage);
 
         currentGame.events.push({
             type: "turn_start",
@@ -1082,6 +1329,54 @@ function getActiveTurnPosition() {
 
     return getCurrentTurnPosition();
 }
+function renderTeamEraserButtons() {
+    if (!currentGame || currentGame.startSelectionActive) {
+        return "";
+    }
+
+    if (!currentGame.teamEraserUsed) {
+        currentGame.teamEraserUsed = createInitialTeamErasers();
+    }
+
+    const inPause =
+        currentGame.awaitingNextRound === true;
+
+    const alreadyErased =
+        inPause && currentRoundAlreadyErased();
+
+    const team1Used = currentGame.teamEraserUsed["0"];
+    const team2Used = currentGame.teamEraserUsed["1"];
+
+    const team1Disabled =
+        !inPause || team1Used || alreadyErased;
+
+    const team2Disabled =
+        !inPause || team2Used || alreadyErased;
+
+    return `
+        <div class="teamEraserRow">
+            <button
+                class="teamEraserButton
+                    ${team1Used ? "teamEraserUsed" : ""}
+                    ${!inPause && !team1Used ? "teamEraserInactive" : ""}
+                    ${alreadyErased && !team1Used ? "teamEraserLocked" : ""}"
+                onclick="useTeamEraser(0)"
+                ${team1Disabled ? "disabled" : ""}>
+                Team 1<br>Löscher
+            </button>
+
+            <button
+                class="teamEraserButton
+                    ${team2Used ? "teamEraserUsed" : ""}
+                    ${!inPause && !team2Used ? "teamEraserInactive" : ""}
+                    ${alreadyErased && !team2Used ? "teamEraserLocked" : ""}"
+                onclick="useTeamEraser(1)"
+                ${team2Disabled ? "disabled" : ""}>
+                Team 2<br>Löscher
+            </button>
+        </div>
+    `;
+}
 function endGame() {
     if (!currentGame) {
         alert("Kein aktives Spiel.");
@@ -1112,7 +1407,281 @@ function endGame() {
 
     alert("Spiel gespeichert.");
 }
+const statCategories = [
+    "0",
+    "1",
+    "2",
+    "3",
+    "rot",
+    "-1",
+    "-2",
+    "-3",
+    "-rot",
+    "1erlöscher",
+    "2erlöscher",
+    "3erlöscher",
+    "rotlöscher",
+    "1erkick",
+    "2erkick",
+    "3erkick",
+    "rotkick",
+    "gegnerkorkenlöscher",
+    "korkenschenker"
+];
 
+function createEmptyPlayerStats() {
+    const stats = {};
+
+    statCategories.forEach(category => {
+        stats[category] = 0;
+    });
+
+    return stats;
+}
+
+function getPlayerSideByPosition(position) {
+    if (position === "topLeft" || position === "bottomLeft") {
+        return "links";
+    }
+
+    if (position === "topRight" || position === "bottomRight") {
+        return "rechts";
+    }
+
+    return "";
+}
+
+function getPlayerPositionByEvent(event) {
+    if (event.position) {
+        return event.position;
+    }
+
+    if (event.type === "player_cap_move" && event.from) {
+        return event.from;
+    }
+
+    if (event.type === "player_cap_remove" && event.playerPosition) {
+        return event.playerPosition;
+    }
+
+    const team = currentGame.teams[event.teamIndex] || [];
+    const playerIndex = team.indexOf(event.playerId);
+
+    if (event.teamIndex === 0) {
+        return playerIndex === 1 ? "bottomLeft" : "topLeft";
+    }
+
+    if (event.teamIndex === 1) {
+        return playerIndex === 1 ? "topRight" : "bottomRight";
+    }
+
+    return null;
+}
+
+function getStatPlayerLabelByEvent(event) {
+    const position = getPlayerPositionByEvent(event);
+
+    if (!position) {
+        return "Unbekannt";
+    }
+
+    const player =
+        getPlayerInfoByPosition(position);
+
+    return `${player.playerName} (${getPlayerSideByPosition(position)})`;
+}
+
+function getHitStatCategory(value) {
+    if (value === 0) return "0";
+
+    if (value === "red1") return "-rot";
+    if (value === "red-1") return "rot";
+
+    const numericValue = Number(value);
+
+    if (numericValue > 0) {
+        return `-${numericValue}`;
+    }
+
+    if (numericValue < 0) {
+        return String(Math.abs(numericValue));
+    }
+
+    return null;
+}
+
+function getRemoveStatCategory(value, isOwn) {
+    if (value === "red1" || value === "red-1") {
+        return isOwn ? "rotlöscher" : "rotkick";
+    }
+
+    const fieldValue = getFieldAbsValue(value);
+
+    if (fieldValue <= 0) {
+        return null;
+    }
+
+    return `${fieldValue}er${isOwn ? "löscher" : "kick"}`;
+}
+
+function getMergeStatCategory(mergeEvent) {
+    if (mergeEvent.statCategory) {
+        return mergeEvent.statCategory;
+    }
+
+    const delta =
+        Math.abs(mergeEvent.removeValue) -
+        Math.abs(mergeEvent.addValue);
+
+    if (delta === 0) {
+        return null;
+    }
+
+    const value = Math.abs(delta);
+
+    if (value < 1 || value > 3) {
+        return null;
+    }
+
+    const suffix =
+        mergeEvent.removeIsOwn !== undefined
+            ? mergeEvent.removeIsOwn
+                ? "löscher"
+                : "kick"
+            : mergeEvent.isOwn
+                ? "löscher"
+                : "kick";
+
+    return `${value}er${suffix}`;
+}
+
+function addStat(statsByPlayer, playerLabel, category, amount = 1) {
+    if (!category) return;
+
+    if (!statsByPlayer[playerLabel]) {
+        statsByPlayer[playerLabel] = createEmptyPlayerStats();
+    }
+
+    if (statsByPlayer[playerLabel][category] === undefined) {
+        statsByPlayer[playerLabel][category] = 0;
+    }
+
+    statsByPlayer[playerLabel][category] += amount;
+}
+function getPlayerStats() {
+    const statsByPlayer = {};
+
+    if (!currentGame || !currentGame.events) {
+        return statsByPlayer;
+    }
+
+    ["topLeft", "bottomLeft", "bottomRight", "topRight"]
+        .forEach(position => {
+            const player =
+                getPlayerInfoByPosition(position);
+
+            const label =
+                `${player.playerName} (${getPlayerSideByPosition(position)})`;
+
+            if (!statsByPlayer[label]) {
+                statsByPlayer[label] = createEmptyPlayerStats();
+            }
+        });
+
+    currentGame.events.forEach(event => {
+        const playerLabel =
+            getStatPlayerLabelByEvent(event);
+
+        if (event.type === "field_add") {
+            if (event.merged) return;
+
+            addStat(
+                statsByPlayer,
+                playerLabel,
+                getHitStatCategory(event.value)
+            );
+        }
+
+        if (event.type === "field_remove") {
+            if (event.merged) return;
+
+            addStat(
+                statsByPlayer,
+                playerLabel,
+                getRemoveStatCategory(event.value, event.isOwn)
+            );
+        }
+
+        if (event.type === "field_merge") {
+            addStat(
+                statsByPlayer,
+                playerLabel,
+                event.statCategory
+            );
+        }
+
+        if (event.type === "player_cap_remove") {
+            addStat(
+                statsByPlayer,
+                playerLabel,
+                "gegnerkorkenlöscher"
+            );
+        }
+
+        if (event.type === "player_cap_move") {
+            addStat(
+                statsByPlayer,
+                playerLabel,
+                "korkenschenker"
+            );
+        }
+    });
+
+    return statsByPlayer;
+}
+function renderPlayerStatsTable() {
+    const statsByPlayer = getPlayerStats();
+    const playerLabels = Object.keys(statsByPlayer);
+
+    if (playerLabels.length === 0) {
+        return "";
+    }
+
+    let html = `
+        <div class="playerStatsWrapper">
+            <h3>Spielerstatistik</h3>
+            <div class="playerStatsScroll">
+                <table class="playerStatsTable">
+                    <thead>
+                        <tr>
+                            <th>Kategorie</th>
+                            ${playerLabels.map(playerLabel => `<th>${playerLabel}</th>`).join("")}
+                        </tr>
+                    </thead>
+                    <tbody>
+    `;
+
+    statCategories.forEach(category => {
+        html += `
+            <tr>
+                <td>${category}</td>
+                ${playerLabels.map(playerLabel => {
+                    const value = statsByPlayer[playerLabel][category] || 0;
+                    return `<td>${value === 0 ? "" : value}</td>`;
+                }).join("")}
+            </tr>
+        `;
+    });
+
+    html += `
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    `;
+
+    return html;
+}
 function renderGameInfo() {
     const gameInfo = document.getElementById("gameInfo");
     if (!currentGame) {
@@ -1127,7 +1696,10 @@ function renderGameInfo() {
             Runde ${currentGame.round}
         </h2>`;
     }
-    
+    const nextButtonText =
+        currentGame.awaitingNextRound
+            ? "Nächste Runde"
+            : "Weiter";
 
 
 
@@ -1137,19 +1709,24 @@ function renderGameInfo() {
     const isRoundTransition =
         currentGame.roundTransitionUntil &&
         Date.now() < currentGame.roundTransitionUntil;
+    const currentTurn =
+        isRoundTransition || currentGame.awaitingNextRound
+            ? null
+            : getActiveTurnPosition();
 
-    const currentTurn = isRoundTransition
-        ? null
-        : getActiveTurnPosition();
 
     const t1Left = getPlayerName(currentGame.teams[0][0]);
     const t1Right = getPlayerName(currentGame.teams[0][1]);
     const t2Left = getPlayerName(currentGame.teams[1][0]);
     const t2Right = getPlayerName(currentGame.teams[1][1]);
     const startMode = currentGame.startSelectionActive;
-
+    const pauseMode = currentGame.awaitingNextRound === true;
+    const winnerText =
+    currentGame.beerWinnerTeamIndex !== null
+        ? `<h2 style="text-align:center;">Team ${currentGame.beerWinnerTeamIndex + 1} hat gewonnen.</h2>`
+        : "";
     const fieldHtml = `
-    <div class="gameField ${startMode ? "startSelectField" : ""}"
+    <div class="gameField ${startMode ? "startSelectField" : ""} ${pauseMode ? "roundPauseField" : ""}"
     onpointerdown="targetPointerDown(event, 0)"
     onpointerup="targetPointerUp(event, 0)"
     onpointercancel="targetPointerCancel(0)"
@@ -1177,6 +1754,10 @@ function renderGameInfo() {
             onclick="${startMode ? "selectStartPlayer('topRight')" : ""}" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
             ${t2Right}
         </div>
+        ${renderPlayerBeerButton("topLeft")}
+        ${renderPlayerBeerButton("bottomLeft")}
+        ${renderPlayerBeerButton("bottomRight")}
+        ${renderPlayerBeerButton("topRight")}
         <button class="playerCapButton playerCapTopLeft"
             id="${getPlayerCapDomId("topLeft")}"
             onpointerdown="playerCapPointerDown(event, 'topLeft')"
@@ -1246,7 +1827,7 @@ function renderGameInfo() {
         Start: ${new Date(currentGame.startTime).toLocaleString()}<br>
         Laufzeit: <span id="elapsedTime">${getElapsedTime()}</span><br><br>
 
-        <button onclick="nextTurn()">Weiter</button>
+        <button onclick="nextTurn()">${nextButtonText}</button>
        <button onclick="undoGameAction()" ${undoStack.length === 0 ? "disabled" : ""}>
     Undo
 </button>
@@ -1261,7 +1842,10 @@ function renderGameInfo() {
         <div style="text-align:center;">
             ${getScoreDisplay()}
         </div>
+        ${winnerText}
+        ${renderTeamEraserButtons()}
         ${fieldHtml}
+        ${renderPlayerStatsTable()}
         <button onclick="endGame()">Spiel beenden</button>
     `;
 }
@@ -1315,7 +1899,10 @@ function getPressKey(value) {
 }
 
 function targetPointerDown(event, value) {
-    if (currentGame && currentGame.startSelectionActive) {
+    if (
+        currentGame &&
+        (currentGame.startSelectionActive || currentGame.awaitingNextRound)
+    ) {
         return;
     }
     event.preventDefault();
@@ -1349,7 +1936,10 @@ function targetPointerDown(event, value) {
 }
 
 function targetPointerUp(event, value) {
-    if (currentGame && currentGame.startSelectionActive) {
+    if (
+        currentGame &&
+        (currentGame.startSelectionActive || currentGame.awaitingNextRound)
+    ) {
         return;
     }
     event.preventDefault();
@@ -1458,7 +2048,8 @@ function handleTargetInput(value, isLongPress) {
                 timestamp: Date.now(),
                 logId: logId,
                 turnKey: getTurnKey(),
-                merged: false
+                merged: false,
+                position: player.position,
             });
             checkTurnMergeRule();
         });
@@ -1518,7 +2109,8 @@ function handleTargetInput(value, isLongPress) {
             timestamp: Date.now(),
             logId: logId,
             turnKey: getTurnKey(),
-            merged: false
+            merged: false,
+            position: player.position,
         });
         checkTurnMergeRule();
     });
@@ -1738,14 +2330,14 @@ function formatTeamScore(points, ownRed) {
 
     return String(points);
 }
-function getRoundResultMessage(roundNumber) {
+function getRoundResultMessage(roundNumber, options = {}) {
     const score = getCurrentScore();
     const c = currentGame.fieldCounts;
 
     const team1Points = score.team1;
     const team2Points = score.team2;
 
-   const diff = Math.abs(team1Points - team2Points);
+    const diff = Math.abs(team1Points - team2Points);
 
     const winningTeam =
         team1Points > team2Points
@@ -1755,28 +2347,251 @@ function getRoundResultMessage(roundNumber) {
                 : 0;
 
     const team1OwnRed = (c["red1"] || 0) > 0;
-    const team1EnemyRed = (c["red-1"] || 0) > 0;
-
     const team2OwnRed = (c["red-1"] || 0) > 0;
-    const team2EnemyRed = (c["red1"] || 0) > 0;
 
     let parts = [`Ende Runde ${roundNumber}:`];
 
     if (team1OwnRed && team2OwnRed) {
         parts.push("Beide Teams müssen ihre Biere exen.");
     } else if (team1OwnRed) {
-        parts.push("Team 1 muss ihre Biere exen.");
+        parts.push("Team 1 müssen ihre Biere exen.");
     } else if (team2OwnRed) {
-        parts.push("Team 2 muss ihre Biere exen.");
+        parts.push("Team 2 müssen ihre Biere exen.");
+    }
+
+    if (options.eraser) {
+        parts.push("Löscher");
+        return parts.join(" ");
     }
 
     parts.push(
-    winningTeam === 0
-        ? "Nullerrunde."
-        : `Team ${winningTeam} darf ${diff === 1 ? "einen Schluck" : diff + " Schlücke"} trinken.`
+        winningTeam === 0
+            ? "Nullerrunde."
+            : `Team ${winningTeam} darf ${diff === 1 ? "einen Schluck" : diff + " Schlücke"} trinken.`
     );
 
     return parts.join(" ");
+}
+function finishRound(options = {}) {
+    const finishedRound = currentGame.round;
+
+    currentGame.forcedTurnActive = false;
+    currentGame.forcedTurnQueue = [];
+
+    const roundResultMessage =
+        getRoundResultMessage(finishedRound, {
+            eraser: options.eraser === true
+        });
+
+    const resultLogId =
+        debugLog(roundResultMessage);
+
+    currentGame.events.push({
+        type: "round_result",
+        round: finishedRound,
+        eraser: options.eraser === true,
+        eraserTeamIndex: options.eraserTeamIndex,
+        timestamp: Date.now(),
+        logId: resultLogId
+    });
+    
+    currentGame.roundBeerActiveTeams =
+        getBeerActiveTeamsForCurrentRound({
+            eraser: options.eraser === true
+        });
+
+    getTeamsThatMustEx().forEach(teamIndex => {
+        resetTeamBeersForEx(teamIndex);
+    });
+    currentGame.awaitingNextRound = true;
+    currentGame.keepStartPlayerForNextRound =
+        options.keepStartPlayer === true;
+}
+function usePlayerBeer(position) {
+    if (!currentGame) return;
+    if (currentGame.startSelectionActive) return;
+
+    if (!currentGame.awaitingNextRound) {
+        return;
+    }
+
+    if (currentGame.beerWinnerTeamIndex !== null) {
+        return;
+    }
+
+    if (!currentGame.playerBeers) {
+        currentGame.playerBeers = createInitialPlayerBeers();
+    }
+
+    if (currentGame.playerBeers[position]) {
+        return;
+    }
+
+    const player =
+        getPlayerInfoByPosition(position);
+
+    if (!teamCanUseBeer(player.teamIndex)) {
+        return;
+    }
+
+    commitGameAction(() => {
+        currentGame.playerBeers[position] = true;
+
+        const beerLogId =
+            debugLog(`${player.playerName} hat sein Bier leer.`);
+
+        currentGame.events.push({
+            type: "player_beer_empty",
+            playerId: player.playerId,
+            teamIndex: player.teamIndex,
+            position: position,
+            round: currentGame.round,
+            timestamp: Date.now(),
+            logId: beerLogId
+        });
+
+        if (teamHasBothBeersEmpty(player.teamIndex)) {
+            currentGame.beerWinnerTeamIndex = player.teamIndex;
+            currentGame.endTime = new Date().toISOString();
+
+            const winLogId =
+                debugLog(`Team ${player.teamIndex + 1} hat gewonnen.`);
+
+            currentGame.events.push({
+                type: "team_win",
+                teamIndex: player.teamIndex,
+                round: currentGame.round,
+                timestamp: Date.now(),
+                logId: winLogId
+            });
+
+            stopGameTimer();
+        }
+    });
+}
+function renderPlayerBeerButton(position) {
+    if (!currentGame || currentGame.startSelectionActive) {
+        return "";
+    }
+
+    if (!currentGame.playerBeers) {
+        currentGame.playerBeers = createInitialPlayerBeers();
+    }
+
+    const player =
+        getPlayerInfoByPosition(position);
+
+    const inPause =
+        currentGame.awaitingNextRound === true;
+
+    const beerEmpty =
+        isPlayerBeerEmpty(position);
+
+    const gameWon =
+        currentGame.beerWinnerTeamIndex !== null;
+
+    const allowedTeam =
+        teamCanUseBeer(player.teamIndex);
+
+    const inactive =
+        !gameWon &&
+        !beerEmpty &&
+        (!inPause || !allowedTeam);
+
+    const locked =
+        beerEmpty;
+
+    const gameOverStanding =
+        gameWon && !beerEmpty;
+
+    const disabled =
+        locked || inactive;
+
+    return `
+        <button
+            class="playerBeerButton playerBeer_${position}
+                ${inactive ? "beerInactive" : ""}
+                ${locked ? "beerLocked" : ""}
+                ${gameOverStanding ? "beerGameOver" : ""}"
+            onclick="usePlayerBeer('${position}')"
+            onpointerdown="event.stopPropagation()"
+            onpointerup="event.stopPropagation()"
+            ${disabled ? "disabled" : ""}>
+            Bier
+        </button>
+    `;
+}
+function useTeamEraser(teamIndex) {
+    if (!currentGame) return;
+    if (currentGame.startSelectionActive) return;
+
+    // Löscher nur zwischen Runden
+    if (!currentGame.awaitingNextRound) {
+        return;
+    }
+
+    if (!currentGame.teamEraserUsed) {
+        currentGame.teamEraserUsed = createInitialTeamErasers();
+    }
+
+    const key = String(teamIndex);
+
+    if (currentGame.teamEraserUsed[key]) {
+        return;
+    }
+
+    // Pro beendeter Runde nur ein Löscher
+    if (currentRoundAlreadyErased()) {
+        return;
+    }
+
+    commitGameAction(() => {
+        currentGame.teamEraserUsed[key] = true;
+
+        const oldRoundResult =
+            getLastRoundResultEventForCurrentRound();
+
+        if (oldRoundResult && oldRoundResult.logId) {
+            oldRoundResult.undone = true;
+            oldRoundResult.replacedByEraser = true;
+            markLogUndone(oldRoundResult.logId);
+        }
+
+        const eraserUseLogId =
+            debugLog(`Team ${teamIndex + 1} setzt Löscher ein`);
+
+        currentGame.events.push({
+            type: "team_eraser_use",
+            teamIndex: teamIndex,
+            round: currentGame.round,
+            timestamp: Date.now(),
+            logId: eraserUseLogId
+        });
+
+        const eraserResultMessage =
+            getRoundResultMessage(currentGame.round, {
+                eraser: true
+            });
+
+        const eraserResultLogId =
+            debugLog(eraserResultMessage);
+
+        currentGame.events.push({
+            type: "round_result",
+            round: currentGame.round,
+            eraser: true,
+            eraserTeamIndex: teamIndex,
+            timestamp: Date.now(),
+            logId: eraserResultLogId,
+            replacesLogId: oldRoundResult ? oldRoundResult.logId : null
+        });
+        currentGame.roundBeerActiveTeams =
+            getBeerActiveTeamsForCurrentRound({
+                eraser: true
+            });
+        // Nächste Runde startet mit demselben Startspieler
+        currentGame.keepStartPlayerForNextRound = true;
+    });
 }
 function getScoreDisplay() {
 
@@ -1830,9 +2645,7 @@ function checkTurnMergeRule() {
     for (const addEvent of turnEvents.filter(e => e.type === "field_add")) {
         for (const removeEvent of turnEvents.filter(e => e.type === "field_remove")) {
 
-            if (addEvent.isOwn !== removeEvent.isOwn) {
-                continue;
-            }
+           
 
             addEvent.merged = true;
             removeEvent.merged = true;
@@ -1896,14 +2709,21 @@ function checkTurnMergeRule() {
 
             const logId = debugLog(message);
 
+            const statCategory =
+                getMergeStatCategoryFromEvents(addEvent, removeEvent);
+
             currentGame.events.push({
                 type: "field_merge",
-                isOwn: addEvent.isOwn,
+                isOwn: removeEvent.isOwn,
                 addValue: addValue,
                 removeValue: removeValue,
+                addIsOwn: addEvent.isOwn,
+                removeIsOwn: removeEvent.isOwn,
                 scoreDelta: scoreDelta,
+                statCategory: statCategory,
                 playerId: player.playerId,
                 teamIndex: player.teamIndex,
+                position: player.position,
                 timestamp: Date.now(),
                 logId: logId,
                 logText: message,
