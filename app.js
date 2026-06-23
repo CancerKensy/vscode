@@ -1501,9 +1501,8 @@ function getStatPlayerLabelByEvent(event) {
     const player =
         getPlayerInfoByPosition(position);
 
-    return `${player.playerName} (${getPlayerSideByPosition(position)})`;
+    return player.playerName;
 }
-
 function getHitStatCategory(value) {
     if (value === 0) return "0";
 
@@ -1589,17 +1588,17 @@ function getPlayerStats() {
     }
 
     ["topLeft", "bottomLeft", "bottomRight", "topRight"]
-        .forEach(position => {
-            const player =
-                getPlayerInfoByPosition(position);
+    .forEach(position => {
+        const player =
+            getPlayerInfoByPosition(position);
 
-            const label =
-                `${player.playerName} (${getPlayerSideByPosition(position)})`;
+        const label =
+            player.playerName;
 
-            if (!statsByPlayer[label]) {
-                statsByPlayer[label] = createEmptyPlayerStats();
-            }
-        });
+        if (!statsByPlayer[label]) {
+            statsByPlayer[label] = createEmptyPlayerStats();
+        }
+    });
 
     currentGame.events.forEach(event => {
         const playerLabel =
