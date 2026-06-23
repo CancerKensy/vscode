@@ -31,7 +31,10 @@ if (currentGame && !currentGame.playerBeers) {
     currentGame.playerBeers = createInitialPlayerBeers();
 }
 
-if (currentGame && currentGame.beerWinnerTeamIndex === undefined) {
+if (
+    currentGame &&
+    !Number.isInteger(currentGame.beerWinnerTeamIndex)
+) {
     currentGame.beerWinnerTeamIndex = null;
 }
 if (currentGame && !currentGame.roundBeerActiveTeams) {
@@ -65,6 +68,12 @@ let fieldLongPress = false;
 function getNextStartPosition(currentStartPosition) {
     const index = startPattern.indexOf(currentStartPosition);
     return startPattern[(index + 1) % startPattern.length];
+}
+function hasBeerWinner() {
+    return (
+        currentGame &&
+        Number.isInteger(currentGame.beerWinnerTeamIndex)
+    );
 }
 function createInitialPlayerBeers() {
     return {
@@ -967,6 +976,10 @@ function startGame() {
         awaitingNextRound: false,
         keepStartPlayerForNextRound: false,
         roundBeerActiveTeams: [],
+        beerWinnerTeamIndex: null,
+        endTime: null,
+        roundBeerActiveTeams: [],
+        playerBeers: createInitialPlayerBeers(),
     };
     undoStack = [];
     redoStack = [];
@@ -1005,7 +1018,7 @@ function syncGameTimerWithGameState() {
         return;
     }
 
-    if (currentGame.beerWinnerTeamIndex !== null) {
+    if (hasBeerWinner()) {
         stopGameTimer();
         updateElapsedTimeOnly();
         return;
@@ -1122,7 +1135,7 @@ function getPlayerInfoByPosition(position) {
 }
 function nextTurn() {
     if (!currentGame) return;
-    if (currentGame.beerWinnerTeamIndex !== null) {
+    if (hasBeerWinner()) {
         return;
     }
     if (currentGame.startSelectionActive) {
@@ -1722,7 +1735,7 @@ function renderGameInfo() {
     const startMode = currentGame.startSelectionActive;
     const pauseMode = currentGame.awaitingNextRound === true;
     const winnerText =
-    currentGame.beerWinnerTeamIndex !== null
+    hasBeerWinner()
         ? `<h2 style="text-align:center;">Team ${currentGame.beerWinnerTeamIndex + 1} hat gewonnen.</h2>`
         : "";
     const fieldHtml = `
@@ -2415,7 +2428,7 @@ function usePlayerBeer(position) {
         return;
     }
 
-    if (currentGame.beerWinnerTeamIndex !== null) {
+    if (hasBeerWinner()) {
         return;
     }
 
@@ -2488,7 +2501,7 @@ function renderPlayerBeerButton(position) {
         isPlayerBeerEmpty(position);
 
     const gameWon =
-        currentGame.beerWinnerTeamIndex !== null;
+        hasBeerWinner();
 
     const allowedTeam =
         teamCanUseBeer(player.teamIndex);
