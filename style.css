@@ -85,14 +85,56 @@ button,
     aspect-ratio: 3 / 1;
     height: auto;
     margin-top: 20px;
-    border: 0.4cqw solid #222;
+    border: 1cqw solid #222;
+    border-color: #f5aa00;
     border-radius: 1cqw;
     overflow: hidden;
     container-type: size;
     background: #03213b ;
     transition: background 0.15s ease;
 }
+.gameField {
+    position: relative;
+    overflow: hidden;
+}
 
+/* dunkler Hintergrund während Startauswahl */
+.gameField.startSelectField {
+    border-color:  #272411;
+    pointer-events: none;
+}
+
+.gameField.startSelectField::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    z-index: 10;
+    pointer-events: none;
+}
+
+/* alles außer Spieler-Namen während Startauswahl deaktivieren */
+.gameField.startSelectField .targetButton,
+.gameField.startSelectField .redButton,
+.gameField.startSelectField .playerCapButton {
+    pointer-events: none;
+    opacity: 0.35;
+}
+.gameField.startSelectField:hover,
+.gameField.startSelectField:active {
+    filter: none;
+}
+/* FieldPlayer bleibt klickbar und sichtbar */
+.gameField.startSelectField .fieldPlayer {
+    pointer-events: auto;
+    z-index: 30;
+}
+
+/* aktive/auswählbare Spieler noch weiter vorne */
+.gameField.startSelectField .startSelectable,
+.gameField.startSelectField .activePlayer {
+    z-index: 35;
+}
 
 .fieldPlayer {
     background-color: rgba(255, 255, 255, 1);
@@ -101,12 +143,13 @@ button,
     padding: 0.8cqw 1.2cqw;
     border: 0.15cqw solid #999;
     border-radius: 0.8cqw;
+    z-index: 20;
 }
 
-.topLeft { top: 3cqh; left: 2cqw; }
-.bottomLeft { bottom: 3cqh; left: 2cqw; }
-.bottomRight { bottom: 3cqh; right: 2cqw; }
-.topRight { top: 3cqh; right: 2cqw; }
+.topLeft { top: 4cqw; left: 4cqw; }
+.bottomLeft { bottom: 4cqw; left: 4cqw; }
+.bottomRight { bottom: 4cqw; right: 4cqw; }
+.topRight { top: 4cqw; right: 4cqw; }
 
 .activePlayer {
     background-color: rgba(255, 255, 255, 1);
@@ -115,6 +158,7 @@ button,
     font-size: 2.4cqw;
     font-weight: bold;
     color: #1f7709;
+    z-index: 20;
 }
 
 .startSelectField .fieldPlayer {
@@ -298,11 +342,11 @@ button,
     transform: scale(0.96) translateY(-50%);
 }
 .targetButton:hover {
-    filter: brightness(1.15);
+    filter: brightness(1.30);
 }
 
 .redButton:hover {
-    filter: brightness(1.55);
+    filter: brightness(2);
 }
 
 .targetButton:active{
@@ -335,11 +379,11 @@ button,
     opacity: 0.5;
     color: #66aaff;
 }
-.gameField:hover:not(:has(.targetButton:hover)):not(:has(.redButton:hover)):not(:has(.playerCapButton:hover)) {
-    background: #032644;
+.gameField:hover:not(:has(.targetButton:hover)):not(:has(.redButton:hover)):not(:has(.playerCapButton:hover)):not(:has(.fieldPlayer:hover)) {
+    background: #093a64;
 }
-.gameField:active:not(:has(.targetButton:active)):not(:has(.redButton:active)):not(:has(.playerCapButton:active)) {
-    background: #032039; 
+.gameField:active:not(:has(.targetButton:active)):not(:has(.redButton:active)):not(:has(.playerCapButton:active)):not(:has(.fieldPlayer:active)) {
+    background: #063055; 
 }
 .debugMerged {
     text-decoration: line-through;
@@ -348,11 +392,11 @@ button,
 }
 .playerCapButton {
     position: absolute;
-    width: 4cqw;
-    height: 4cqw;
-    border-radius: 50%;
+    width: 8cqw;
+    height: 8cqw;
+    border-radius: 0%;
     border: 0;
-    background: #ddd;
+    background: #f5aa00;
     font-size: 2cqw;
     font-weight: bold;
     cursor: pointer;
@@ -360,28 +404,58 @@ button,
     padding: 0;
     margin: 0;
 }
+.playerCapText {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    font-size: 2cqw;
+    font-weight: bold;
+    pointer-events: none;
+}
 
+.playerCapTopLeft .playerCapText {
+    left: 33%;
+    top: 33%;
+}
+
+.playerCapBottomLeft .playerCapText {
+    left: 33%;
+    top: 67%;
+}
+
+.playerCapTopRight .playerCapText {
+    left: 67%;
+    top: 33%;
+}
+
+.playerCapBottomRight .playerCapText {
+    left: 67%;
+    top: 67%;
+}
 .playerCapTopLeft {
-    top: 12cqh;
-    left: 2cqw;
+    top: -0.5cqw;
+    left: -0.5cqw;
+    clip-path: polygon( 100% 0%, 0% 100%, 0% 0%);
 }
 
 .playerCapBottomLeft {
-    bottom: 12cqh;
-    left: 2cqw;
+    bottom: -0.5cqw;
+    left: -0.5cqw;
+    clip-path: polygon( 0% 0%, 0% 100%, 100% 100%);
 }
 
 .playerCapTopRight {
-    top: 12cqh;
-    right: 2cqw;
+    top: -0.5cqw;
+    right: -0.5cqw;
+    clip-path: polygon( 0% 0%, 100% 0%, 100% 100%);
 }
 
 .playerCapBottomRight {
-    bottom: 12cqh;
-    right: 2cqw;
+    bottom: -0.5cqw;
+    right: -0.5cqw;
+    clip-path: polygon(100% 0%, 0% 100%, 100% 100%);
 }
 .playerCapButton:hover {
-    brightness: 1.15;
+    filter: brightness(1.30);
 }
 .playerCapButton:active {
     transform: scale(0.96);

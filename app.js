@@ -21,7 +21,7 @@ let gameTimer = null;
 let roundTransition = false;
 let undoStack = JSON.parse(localStorage.getItem("undoStack")) || [];
 let redoStack = JSON.parse(localStorage.getItem("redoStack")) || [];
-const maxHistoryEntries = 100;
+const maxHistoryEntries = 20;
 const pressState = {};
 const doubleClickDelay = 350;
 const longPressDelay = 500;
@@ -120,7 +120,7 @@ function debugLog(...args) {
         undone: false
     });
 
-    while (logs.length > 1000) {
+    while (logs.length > 100000) {
         logs.shift();
     }
 
@@ -146,20 +146,18 @@ function debugLog(...args) {
     return id;
 }
 function restoreDebugLog() {
-
     const logs =
-        JSON.parse(localStorage.getItem("debugLog"))
-        || [];
+        JSON.parse(localStorage.getItem("debugLog")) || [];
 
     const div =
         document.getElementById("debugConsole");
 
     if (!div) return;
 
-    div.innerHTML = "";
+    const fragment =
+        document.createDocumentFragment();
 
     logs.forEach(log => {
-
         const line =
             document.createElement("div");
 
@@ -173,9 +171,11 @@ function restoreDebugLog() {
         if (log.merged && !log.undone) {
             line.classList.add("debugMerged");
         }
-        div.appendChild(line);
+
+        fragment.appendChild(line);
     });
 
+    div.replaceChildren(fragment);
     div.scrollTop = div.scrollHeight;
 }
 function savePlayers() {
@@ -194,8 +194,21 @@ function cloneGame(game) {
 }
 
 function saveHistory() {
-    localStorage.setItem("undoStack", JSON.stringify(undoStack));
-    localStorage.setItem("redoStack", JSON.stringify(redoStack));
+    undoStack = undoStack.slice(-maxHistoryEntries);
+    redoStack = redoStack.slice(-maxHistoryEntries);
+
+    try {
+        localStorage.setItem("undoStack", JSON.stringify(undoStack));
+        localStorage.setItem("redoStack", JSON.stringify(redoStack));
+    } catch (e) {
+        undoStack = undoStack.slice(-10);
+        redoStack = redoStack.slice(-10);
+
+        localStorage.setItem("undoStack", JSON.stringify(undoStack));
+        localStorage.setItem("redoStack", JSON.stringify(redoStack));
+
+        debugLog("Undo/Redo-Historie wurde wegen vollem Speicher gekürzt.");
+    }
 }
 
 function commitGameAction(actionFunction) {
@@ -298,6 +311,7 @@ function undoGameAction() {
 
     requestAnimationFrame(() => {
         updateAllFieldCountDisplays();
+        updateAllPlayerCapDisplays();
         restoreDebugLog();
     });
 }
@@ -369,6 +383,7 @@ function redoGameAction() {
 
     requestAnimationFrame(() => {
         updateAllFieldCountDisplays();
+        updateAllPlayerCapDisplays();
         restoreDebugLog();
     });
 }
@@ -769,10 +784,16 @@ function getPlayerCapDomId(position) {
 }
 
 function updatePlayerCapDisplay(position) {
-    const el = document.getElementById(getPlayerCapDomId(position));
+    const button =
+        document.getElementById(getPlayerCapDomId(position));
 
-    if (el) {
-        el.textContent = getPlayerCap(position);
+    if (!button) return;
+
+    const text =
+        button.querySelector(".playerCapText");
+
+    if (text) {
+        text.textContent = getPlayerCap(position);
     }
 }
 
@@ -841,13 +862,11 @@ function nextTurn() {
         if (wasForcedTurn) {
             currentGame.forcedTurnQueue.shift();
 
-            currentGame.forcedTurnActive =
-                currentGame.forcedTurnQueue.length > 0;
+            activateNextForcedTurnOrStop();
         } else {
             currentGame.turnInRound++;
 
-            currentGame.forcedTurnActive =
-                currentGame.forcedTurnQueue.length > 0;
+            activateNextForcedTurnOrStop();
         }
 
         if (
@@ -1137,25 +1156,25 @@ function renderGameInfo() {
     onpointerleave="targetPointerCancel(0)">
         <div
             class="fieldPlayer topLeft ${currentTurn === "topLeft" ? "activePlayer" : ""} ${startMode ? "startSelectable" : ""}"
-            onclick="${startMode ? "selectStartPlayer('topLeft')" : ""}">
+            onclick="${startMode ? "selectStartPlayer('topLeft')" : ""}" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
             ${t1Left}
         </div>
 
         <div
             class="fieldPlayer bottomLeft ${currentTurn === "bottomLeft" ? "activePlayer" : ""} ${startMode ? "startSelectable" : ""}"
-            onclick="${startMode ? "selectStartPlayer('bottomLeft')" : ""}">
+            onclick="${startMode ? "selectStartPlayer('bottomLeft')" : ""}" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
             ${t1Right}
         </div>
 
         <div
             class="fieldPlayer bottomRight ${currentTurn === "bottomRight" ? "activePlayer" : ""} ${startMode ? "startSelectable" : ""}"
-            onclick="${startMode ? "selectStartPlayer('bottomRight')" : ""}">
+            onclick="${startMode ? "selectStartPlayer('bottomRight')" : ""}" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
             ${t2Left}
         </div>
 
         <div
             class="fieldPlayer topRight ${currentTurn === "topRight" ? "activePlayer" : ""} ${startMode ? "startSelectable" : ""}"
-            onclick="${startMode ? "selectStartPlayer('topRight')" : ""}">
+            onclick="${startMode ? "selectStartPlayer('topRight')" : ""}" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
             ${t2Right}
         </div>
         <button class="playerCapButton playerCapTopLeft"
@@ -1164,7 +1183,7 @@ function renderGameInfo() {
             onpointerup="playerCapPointerUp(event, 'topLeft')"
             onpointercancel="targetPointerCancel('cap_topLeft')"
             onpointerleave="targetPointerCancel('cap_topLeft')">
-            ${getPlayerCap("topLeft")}
+            <span class="playerCapText">${getPlayerCap("topLeft")}</span>   
         </button>
 
         <button class="playerCapButton playerCapBottomLeft"
@@ -1173,7 +1192,7 @@ function renderGameInfo() {
             onpointerup="playerCapPointerUp(event, 'bottomLeft')"
             onpointercancel="targetPointerCancel('cap_bottomLeft')"
             onpointerleave="targetPointerCancel('cap_bottomLeft')">
-            ${getPlayerCap("bottomLeft")}
+            <span class="playerCapText">${getPlayerCap("bottomLeft")}</span>
         </button>
 
         <button class="playerCapButton playerCapTopRight"
@@ -1182,7 +1201,7 @@ function renderGameInfo() {
             onpointerup="playerCapPointerUp(event, 'topRight')"
             onpointercancel="targetPointerCancel('cap_topRight')"
             onpointerleave="targetPointerCancel('cap_topRight')">
-            ${getPlayerCap("topRight")}
+            <span class="playerCapText">${getPlayerCap("topRight")}</span>
         </button>
 
         <button class="playerCapButton playerCapBottomRight"
@@ -1191,7 +1210,7 @@ function renderGameInfo() {
             onpointerup="playerCapPointerUp(event, 'bottomRight')"
             onpointercancel="targetPointerCancel('cap_bottomRight')"
             onpointerleave="targetPointerCancel('cap_bottomRight')">
-            ${getPlayerCap("bottomRight")}
+            <span class="playerCapText">${getPlayerCap("bottomRight")}</span>
         </button>
         <div class="sideTargets leftTargets">
             <button class="targetButton target3" id="${getFieldDomId(3)}" onpointerdown="targetPointerDown(event, 3)" onpointerup="targetPointerUp(event, 3)" onpointercancel="targetPointerCancel(3)" onpointerleave="targetPointerCancel(3)">${getFieldCount(3)}</button>
@@ -1296,6 +1315,9 @@ function getPressKey(value) {
 }
 
 function targetPointerDown(event, value) {
+    if (currentGame && currentGame.startSelectionActive) {
+        return;
+    }
     event.preventDefault();
     event.stopPropagation();
 
@@ -1327,6 +1349,9 @@ function targetPointerDown(event, value) {
 }
 
 function targetPointerUp(event, value) {
+    if (currentGame && currentGame.startSelectionActive) {
+        return;
+    }
     event.preventDefault();
     event.stopPropagation();
 
@@ -1940,6 +1965,42 @@ function unmarkLogMerged(logId) {
     if (el) {
         el.classList.remove("debugMerged");
     }
+}
+function activateNextForcedTurnOrStop() {
+    if (!currentGame.forcedTurnQueue) {
+        currentGame.forcedTurnQueue = [];
+    }
+
+    while (currentGame.forcedTurnQueue.length > 0) {
+        const position = currentGame.forcedTurnQueue[0];
+
+        if (getPlayerCap(position) > 0) {
+            currentGame.forcedTurnActive = true;
+            return;
+        }
+
+        const player =
+            getPlayerInfoByPosition(position);
+
+        const noCapLogId = debugLog(
+            `${player.playerName} hat keinen Kronkorken für den Sonderzug.`
+        );
+
+        currentGame.events.push({
+            type: "forced_turn_no_cap",
+            playerId: player.playerId,
+            teamIndex: player.teamIndex,
+            position: position,
+            round: currentGame.round,
+            turnInRound: currentGame.turnInRound,
+            timestamp: Date.now(),
+            logId: noCapLogId
+        });
+
+        currentGame.forcedTurnQueue.shift();
+    }
+
+    currentGame.forcedTurnActive = false;
 }
 renderPlayerList();
 renderPlayerSelection();
