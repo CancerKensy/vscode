@@ -1,7 +1,21 @@
 let players = JSON.parse(localStorage.getItem("players")) || [];
 let currentGame = JSON.parse(localStorage.getItem("currentGame")) || null;
+if (currentGame && !currentGame.forcedTurnQueue) {
+    currentGame.forcedTurnQueue = [];
+}
+
+if (currentGame && currentGame.forcedTurnActive === undefined) {
+    currentGame.forcedTurnActive = false;
+}
+
+if (currentGame && currentGame.forcedTurnPosition !== undefined) {
+    delete currentGame.forcedTurnPosition;
+}
 if (currentGame && !currentGame.fieldCounts) {
     currentGame.fieldCounts = createEmptyFieldCounts();
+}
+if (currentGame && !currentGame.playerCaps) {
+    currentGame.playerCaps = createInitialPlayerCaps();
 }
 let gameTimer = null;
 let roundTransition = false;
@@ -28,13 +42,17 @@ const horizontalMap = {
 };
 let fieldPressTimer = null;
 let fieldLongPress = false;
-
+function getNextStartPosition(currentStartPosition) {
+    const index = startPattern.indexOf(currentStartPosition);
+    return startPattern[(index + 1) % startPattern.length];
+}
 function fieldPointerDown(event) {
 
     if (
         event.target.closest(".targetButton") ||
         event.target.closest(".redButton") ||
-        event.target.closest(".fieldPlayer")
+        event.target.closest(".fieldPlayer")||
+        event.target.closest(".playerCapButton")
     ) {
         return;
     }
@@ -52,7 +70,8 @@ function fieldPointerUp(event) {
     if (
         event.target.closest(".targetButton") ||
         event.target.closest(".redButton") ||
-        event.target.closest(".fieldPlayer")
+        event.target.closest(".fieldPlayer") ||
+        event.target.closest(".playerCapButton")
     ) {
         return;
     }
@@ -199,6 +218,7 @@ function commitGameAction(actionFunction) {
 
     requestAnimationFrame(() => {
         updateAllFieldCountDisplays();
+        updateAllPlayerCapDisplays();
         restoreDebugLog();
     });
 }
@@ -444,6 +464,7 @@ function renderPlayerSelection() {
 
     document.getElementById("playerSelection").innerHTML = html;
 }
+
 function getLogTextById(logId) {
     const logs = JSON.parse(localStorage.getItem("debugLog")) || [];
     const entry = logs.find(x => x.id === logId);
@@ -511,8 +532,144 @@ function saveLastSelection() {
 function getLastSelection() {
     return JSON.parse(localStorage.getItem("lastSelection")) || {};
 }
+function createInitialPlayerCaps() {
+    return {
+        topLeft: 1,
+        bottomLeft: 1,
+        bottomRight: 1,
+        topRight: 1
+    };
+}
+function getPlayerCap(position) {
+    if (!currentGame || !currentGame.playerCaps) return 0;
+    return currentGame.playerCaps[position] || 0;
+}
 
+function changePlayerCap(position, delta) {
+    if (!currentGame.playerCaps) {
+        currentGame.playerCaps = createInitialPlayerCaps();
+    }
+
+    const oldValue = currentGame.playerCaps[position] || 0;
+    currentGame.playerCaps[position] = Math.max(0, oldValue + delta);
+}
+function playerCapPointerDown(event, position) {
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+
+    targetPointerDown(event, "cap_" + position);
+}
+
+function playerCapPointerUp(event, position) {
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+
+    const key = "cap_" + position;
+    const state = pressState[key];
+
+    if (!state) return;
+
+    clearTimeout(state.longTimer);
+
+    const isLongPress = state.longTriggered;
+
+    if (isLongPress) {
+        state.longTriggered = false;
+        handlePlayerCapInput(position, true);
+        return;
+    }
+
+    if (state.clickTimer) {
+        clearTimeout(state.clickTimer);
+        state.clickTimer = null;
+        handlePlayerCapInput(position, true);
+        return;
+    }
+
+    state.clickTimer = setTimeout(() => {
+        state.clickTimer = null;
+        handlePlayerCapInput(position, false);
+    }, doubleClickDelay);
+}
+function handlePlayerCapInput(position, isLongPress) {
+    if (!currentGame || currentGame.startSelectionActive) return;
+
+    const currentPosition = getCurrentTurnPosition();
+    const currentPlayer = getCurrentPlayerInfo();
+
+    if (position === currentPosition) {
+        return;
+    }
+
+    if (isLongPress && getPlayerCap(position) <= 0) {
+        return;
+    }
+
+    const targetPlayerName = getPlayerNameByPosition(position);
+
+    commitGameAction(() => {
+        if (isLongPress) {
+            changePlayerCap(position, -1);
+
+            const logId = debugLog(
+                `${currentPlayer.playerName} löscht Kronkorken von ${targetPlayerName}`
+            );
+
+            currentGame.events.push({
+                type: "player_cap_remove",
+                position: position,
+                playerId: currentPlayer.playerId,
+                timestamp: Date.now(),
+                logId: logId
+            });
+
+            return;
+        }
+
+        changePlayerCap(position, +1);
+        if (!currentGame.forcedTurnQueue) {
+            currentGame.forcedTurnQueue = [];
+        }
+
+        currentGame.forcedTurnQueue.push(position);
+        const logId = debugLog(
+            `${currentPlayer.playerName} schießt eigenen Kronkorken zu ${targetPlayerName}`
+        );
+
+        currentGame.events.push({
+            type: "player_cap_move",
+            from: currentPosition,
+            to: position,
+            playerId: currentPlayer.playerId,
+            timestamp: Date.now(),
+            logId: logId
+        });
+    });
+}
+function getPlayerNameByPosition(position) {
+    const positionToTeam = {
+        topLeft: 0,
+        bottomLeft: 0,
+        bottomRight: 1,
+        topRight: 1
+    };
+
+    const positionToPlayerIndex = {
+        topLeft: 0,
+        bottomLeft: 1,
+        bottomRight: 0,
+        topRight: 1
+    };
+
+    const teamIndex = positionToTeam[position];
+    const playerIndex = positionToPlayerIndex[position];
+
+    return getPlayerName(currentGame.teams[teamIndex][playerIndex]);
+}
 function startGame() {
+    
     localStorage.removeItem("debugLog");
 
     const debugConsole =
@@ -591,7 +748,10 @@ function startGame() {
             "red1": 0,
             "red-1": 0
         },
-        events: []
+        events: [],
+        playerCaps: createInitialPlayerCaps(),
+        forcedTurnActive: false,
+        forcedTurnQueue: [],
     };
     undoStack = [];
     redoStack = [];
@@ -604,7 +764,50 @@ function startGame() {
     renderGameInfo();
     startGameTimer();
 }
+function getPlayerCapDomId(position) {
+    return "playerCap_" + position;
+}
 
+function updatePlayerCapDisplay(position) {
+    const el = document.getElementById(getPlayerCapDomId(position));
+
+    if (el) {
+        el.textContent = getPlayerCap(position);
+    }
+}
+
+function updateAllPlayerCapDisplays() {
+    ["topLeft", "bottomLeft", "bottomRight", "topRight"]
+        .forEach(updatePlayerCapDisplay);
+}
+function getPlayerInfoByPosition(position) {
+    const positionToTeam = {
+        topLeft: 0,
+        bottomLeft: 0,
+        bottomRight: 1,
+        topRight: 1
+    };
+
+    const positionToPlayerIndex = {
+        topLeft: 0,
+        bottomLeft: 1,
+        bottomRight: 0,
+        topRight: 1
+    };
+
+    const teamIndex = positionToTeam[position];
+    const playerIndex = positionToPlayerIndex[position];
+
+    const playerId = currentGame.teams[teamIndex][playerIndex];
+
+    return {
+        playerId,
+        playerName: getPlayerName(playerId),
+        teamIndex,
+        teamName: `Team ${teamIndex + 1}`,
+        position
+    };
+}
 function nextTurn() {
     if (!currentGame) return;
 
@@ -621,9 +824,37 @@ function nextTurn() {
     }
 
     commitGameAction(() => {
-        currentGame.turnInRound++;
+        if (!currentGame.forcedTurnQueue) {
+            currentGame.forcedTurnQueue = [];
+        }
 
-        if (currentGame.turnInRound >= 4) {
+        const wasForcedTurn = currentGame.forcedTurnActive;
+
+        const finishedPosition = wasForcedTurn
+            ? currentGame.forcedTurnQueue[0]
+            : getCurrentTurnPosition();
+
+        if (finishedPosition) {
+            changePlayerCap(finishedPosition, -1);
+        }
+
+        if (wasForcedTurn) {
+            currentGame.forcedTurnQueue.shift();
+
+            currentGame.forcedTurnActive =
+                currentGame.forcedTurnQueue.length > 0;
+        } else {
+            currentGame.turnInRound++;
+
+            currentGame.forcedTurnActive =
+                currentGame.forcedTurnQueue.length > 0;
+        }
+
+        if (
+            currentGame.turnInRound >= 4 &&
+            !currentGame.forcedTurnActive &&
+            currentGame.forcedTurnQueue.length === 0
+        ) {
             const finishedRound = currentGame.round;
             const roundResultMessage = getRoundResultMessage(finishedRound);
             const resultLogId = debugLog(roundResultMessage);
@@ -637,18 +868,19 @@ function nextTurn() {
 
             currentGame.turnInRound = 0;
             currentGame.round++;
-            currentGame.fieldCounts = createEmptyFieldCounts();
 
             const nextStartPosition =
-                currentGame.startOrder[
-                    (currentGame.round - 1) % 4
-                ];
+                getNextStartPosition(currentGame.startPosition);
 
             currentGame.startPosition = nextStartPosition;
             currentGame.startIndex =
                 startPattern.indexOf(nextStartPosition);
 
+            currentGame.startOrder =
+                getOrderFromStart(nextStartPosition);
+
             currentGame.roundTransitionUntil = Date.now() + 1000;
+            currentGame.pendingRoundReset = true;
 
             const roundLogId = debugLog(`Runde ${currentGame.round}`);
 
@@ -658,19 +890,102 @@ function nextTurn() {
                 timestamp: Date.now(),
                 logId: roundLogId
             });
-        } else {
-            currentGame.roundTransitionUntil = null;
+
+            const startPlayer =
+                getPlayerInfoByPosition(currentGame.startPosition);
+
+            const turnLogId =
+                debugLog(`${startPlayer.playerName} startet.`);
+
+            currentGame.events.push({
+                type: "turn_start",
+                playerId: startPlayer.playerId,
+                teamIndex: startPlayer.teamIndex,
+                round: currentGame.round,
+                turnInRound: currentGame.turnInRound,
+                timestamp: Date.now(),
+                logId: turnLogId
+            });
+
+            setTimeout(() => {
+                if (!currentGame || !currentGame.pendingRoundReset) return;
+
+                currentGame.fieldCounts = createEmptyFieldCounts();
+                currentGame.playerCaps = createInitialPlayerCaps();
+                currentGame.pendingRoundReset = false;
+                currentGame.roundTransitionUntil = null;
+
+                saveCurrentGame();
+                renderGameInfo();
+                restoreDebugLog();
+            }, 1000);
+
+            return;
         }
 
-        const currentPlayer = getCurrentPlayerInfo();
-        const turnLogId = debugLog(`${currentPlayer.playerName} ist dran.`);
+        currentGame.roundTransitionUntil = null;
+
+        let nextPosition = getActiveTurnPosition();
+
+        while (
+            nextPosition &&
+            !currentGame.forcedTurnActive &&
+            currentGame.turnInRound < 4 &&
+            getPlayerCap(nextPosition) <= 0
+        ) {
+            const skippedPlayer =
+                getPlayerInfoByPosition(nextPosition);
+
+            const noCapLogId = debugLog(
+                `${skippedPlayer.playerName} hat keinen Kronkorken zum Schießen.`
+            );
+
+            currentGame.events.push({
+                type: "player_no_cap",
+                playerId: skippedPlayer.playerId,
+                teamIndex: skippedPlayer.teamIndex,
+                position: nextPosition,
+                round: currentGame.round,
+                turnInRound: currentGame.turnInRound,
+                timestamp: Date.now(),
+                logId: noCapLogId
+            });
+
+            currentGame.turnInRound++;
+
+            if (currentGame.turnInRound >= 4) {
+                return;
+            }
+
+            nextPosition = getCurrentTurnPosition();
+        }
+
+        nextPosition = getActiveTurnPosition();
+
+        if (!nextPosition) {
+            return;
+        }
+
+        const nextPlayer =
+            getPlayerInfoByPosition(nextPosition);
+
+        const turnMessage =
+            currentGame.forcedTurnActive
+                ? `Sonderzug: ${nextPlayer.playerName} ist dran.`
+                : currentGame.turnInRound === 0
+                    ? `${nextPlayer.playerName} startet.`
+                    : `${nextPlayer.playerName} ist dran.`;
+
+        const turnLogId = debugLog(turnMessage);
 
         currentGame.events.push({
             type: "turn_start",
-            playerId: currentPlayer.playerId,
-            teamIndex: currentPlayer.teamIndex,
+            playerId: nextPlayer.playerId,
+            teamIndex: nextPlayer.teamIndex,
+            position: nextPosition,
             round: currentGame.round,
             turnInRound: currentGame.turnInRound,
+            forcedTurn: currentGame.forcedTurnActive,
             timestamp: Date.now(),
             logId: turnLogId
         });
@@ -684,7 +999,11 @@ function getOrderFromStart(start) {
     return [start, second, third, fourth];
 }
 function getRoundOrder() {
-    return getOrderFromStart(currentGame.startPosition);
+    if (!currentGame || !currentGame.startOrder) {
+        return [];
+    }
+
+    return currentGame.startOrder;
 }
 function selectStartPlayer(position) {
     if (!currentGame || !currentGame.startSelectionActive) return;
@@ -708,7 +1027,7 @@ function selectStartPlayer(position) {
     });
 
     const currentPlayer = getCurrentPlayerInfo();
-    const turnLogId = debugLog(`${currentPlayer.playerName} ist dran.`);
+    const turnLogId = debugLog(`${currentPlayer.playerName} startet.`);
 
     currentGame.events.push({
         type: "turn_start",
@@ -726,20 +1045,24 @@ function selectStartPlayer(position) {
 }
 function getCurrentTurnPosition() {
     if (!currentGame) return null;
+    if (currentGame.startSelectionActive) return null;
 
+    return currentGame.startOrder[currentGame.turnInRound] || null;
+}
+function getActiveTurnPosition() {
+    if (!currentGame) return null;
     if (currentGame.startSelectionActive) return null;
 
     if (
-        currentGame.roundTransitionUntil &&
-        Date.now() < currentGame.roundTransitionUntil
+        currentGame.forcedTurnActive &&
+        currentGame.forcedTurnQueue &&
+        currentGame.forcedTurnQueue.length > 0
     ) {
-        return null;
+        return currentGame.forcedTurnQueue[0];
     }
 
-    const order = getRoundOrder();
-    return order[currentGame.turnInRound];
+    return getCurrentTurnPosition();
 }
-
 function endGame() {
     if (!currentGame) {
         alert("Kein aktives Spiel.");
@@ -792,7 +1115,13 @@ function renderGameInfo() {
     const team1 = currentGame.teams[0].map(getPlayerName).join(" + ");
     const team2 = currentGame.teams[1].map(getPlayerName).join(" + ");
 
-    const currentTurn = getCurrentTurnPosition();
+    const isRoundTransition =
+        currentGame.roundTransitionUntil &&
+        Date.now() < currentGame.roundTransitionUntil;
+
+    const currentTurn = isRoundTransition
+        ? null
+        : getActiveTurnPosition();
 
     const t1Left = getPlayerName(currentGame.teams[0][0]);
     const t1Right = getPlayerName(currentGame.teams[0][1]);
@@ -829,6 +1158,41 @@ function renderGameInfo() {
             onclick="${startMode ? "selectStartPlayer('topRight')" : ""}">
             ${t2Right}
         </div>
+        <button class="playerCapButton playerCapTopLeft"
+            id="${getPlayerCapDomId("topLeft")}"
+            onpointerdown="playerCapPointerDown(event, 'topLeft')"
+            onpointerup="playerCapPointerUp(event, 'topLeft')"
+            onpointercancel="targetPointerCancel('cap_topLeft')"
+            onpointerleave="targetPointerCancel('cap_topLeft')">
+            ${getPlayerCap("topLeft")}
+        </button>
+
+        <button class="playerCapButton playerCapBottomLeft"
+        id="${getPlayerCapDomId("bottomLeft")}"
+            onpointerdown="playerCapPointerDown(event, 'bottomLeft')"
+            onpointerup="playerCapPointerUp(event, 'bottomLeft')"
+            onpointercancel="targetPointerCancel('cap_bottomLeft')"
+            onpointerleave="targetPointerCancel('cap_bottomLeft')">
+            ${getPlayerCap("bottomLeft")}
+        </button>
+
+        <button class="playerCapButton playerCapTopRight"
+            id="${getPlayerCapDomId("topRight")}"
+            onpointerdown="playerCapPointerDown(event, 'topRight')"
+            onpointerup="playerCapPointerUp(event, 'topRight')"
+            onpointercancel="targetPointerCancel('cap_topRight')"
+            onpointerleave="targetPointerCancel('cap_topRight')">
+            ${getPlayerCap("topRight")}
+        </button>
+
+        <button class="playerCapButton playerCapBottomRight"
+            id="${getPlayerCapDomId("bottomRight")}"
+            onpointerdown="playerCapPointerDown(event, 'bottomRight')"
+            onpointerup="playerCapPointerUp(event, 'bottomRight')"
+            onpointercancel="targetPointerCancel('cap_bottomRight')"
+            onpointerleave="targetPointerCancel('cap_bottomRight')">
+            ${getPlayerCap("bottomRight")}
+        </button>
         <div class="sideTargets leftTargets">
             <button class="targetButton target3" id="${getFieldDomId(3)}" onpointerdown="targetPointerDown(event, 3)" onpointerup="targetPointerUp(event, 3)" onpointercancel="targetPointerCancel(3)" onpointerleave="targetPointerCancel(3)">${getFieldCount(3)}</button>
             <button class="targetButton target2" id="${getFieldDomId(2)}" onpointerdown="targetPointerDown(event, 2)" onpointerup="targetPointerUp(event, 2)" onpointercancel="targetPointerCancel(2)" onpointerleave="targetPointerCancel(2)">${getFieldCount(2)}</button>
@@ -1078,9 +1442,7 @@ function handleTargetInput(value, isLongPress) {
     }
 
     if (currentGame.fieldCounts[key] <= 0) {
-        debugLog(
-            `${player.playerName} aus ${player.teamName} kann auf Feld ${fieldValue} keinen Korken löschen`
-        );
+
         return;
     }
 
@@ -1188,7 +1550,7 @@ function getFieldCount(value) {
 }
 
 function getCurrentPlayerInfo() {
-    const position = getCurrentTurnPosition();
+    const position = getActiveTurnPosition();
 
     const positionToTeam = {
         topLeft: 0,

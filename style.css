@@ -335,14 +335,54 @@ button,
     opacity: 0.5;
     color: #66aaff;
 }
-.gameField:hover:not(:has(.targetButton:hover)):not(:has(.redButton:hover)) {
+.gameField:hover:not(:has(.targetButton:hover)):not(:has(.redButton:hover)):not(:has(.playerCapButton:hover)) {
     background: #032644;
 }
-.gameField:active:not(:has(.targetButton:active)):not(:has(.redButton:active)) {
+.gameField:active:not(:has(.targetButton:active)):not(:has(.redButton:active)):not(:has(.playerCapButton:active)) {
     background: #032039; 
 }
 .debugMerged {
     text-decoration: line-through;
     opacity: 0.45;
     color: #66aaff;
+}
+.playerCapButton {
+    position: absolute;
+    width: 4cqw;
+    height: 4cqw;
+    border-radius: 50%;
+    border: 0;
+    background: #ddd;
+    font-size: 2cqw;
+    font-weight: bold;
+    cursor: pointer;
+    z-index: 6;
+    padding: 0;
+    margin: 0;
+}
+
+.playerCapTopLeft {
+    top: 12cqh;
+    left: 2cqw;
+}
+
+.playerCapBottomLeft {
+    bottom: 12cqh;
+    left: 2cqw;
+}
+
+.playerCapTopRight {
+    top: 12cqh;
+    right: 2cqw;
+}
+
+.playerCapBottomRight {
+    bottom: 12cqh;
+    right: 2cqw;
+}
+.playerCapButton:hover {
+    brightness: 1.15;
+}
+.playerCapButton:active {
+    transform: scale(0.96);
 }
